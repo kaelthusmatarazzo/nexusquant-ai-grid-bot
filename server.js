@@ -49,7 +49,8 @@ const defaultDB = {
         vaultBalance: 0.00,
         totalWithdrawn: 0.00,
         wins: 0,
-        losses: 0
+        losses: 0,
+        botStartedAt: Date.now()
     },
     gridConfig: {
         botRunning: true,
@@ -100,6 +101,10 @@ function recomputeWalletFromTrades(dbData) {
     dbData.wallet.totalProfit = netProfit;
     dbData.wallet.walletBalance = Number((initCap + netProfit).toFixed(4));
     dbData.wallet.vaultBalance = Number(Math.max(0, netProfit * 0.25).toFixed(4));
+    if (!dbData.wallet.botStartedAt) {
+        const metaStart = dbData.meta && dbData.meta.createdAt ? new Date(dbData.meta.createdAt).getTime() : 0;
+        dbData.wallet.botStartedAt = (metaStart > 0 ? metaStart : Date.now());
+    }
     return dbData;
 }
 
@@ -116,6 +121,7 @@ function auditAndNormalizeDatabase(dbData) {
             totalWithdrawn: 0.00,
             wins: 0,
             losses: 0,
+            botStartedAt: Date.now(),
             dailyDate: new Date().toISOString().slice(0, 10),
             dailyStartBalance: cleanCap,
             dailyProfitUSD: 0,
@@ -1310,6 +1316,7 @@ const server = http.createServer(async (req, res) => {
             totalWithdrawn: 0.00,
             wins: 0,
             losses: 0,
+            botStartedAt: Date.now(),
             dailyDate: new Date().toISOString().slice(0, 10),
             dailyStartBalance: newCap,
             dailyProfitUSD: 0,
