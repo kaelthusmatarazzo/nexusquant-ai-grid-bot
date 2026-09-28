@@ -70,14 +70,32 @@ const defaultDB = {
         liveAnchorPrice: 174.50,
         simOffset: 0,
         trendMomentum: 0,
-        lastEvent: null
+        lastEvent: null,
+        prices: {},
+        priceHistory: {},
+        botStats: {},
+        pairCooldowns: {},
+        top3Pairs: ['SOLUSDT', 'SUIUSDT', 'WIFUSDT']
     },
     openPositions: [],
     trades: [],
     withdrawals: []
 };
 
+function ensureLiveStateIntegrity(dbData) {
+    if (!dbData.liveState) dbData.liveState = {};
+    if (!dbData.liveState.prices) dbData.liveState.prices = {};
+    if (!dbData.liveState.priceHistory) dbData.liveState.priceHistory = {};
+    if (!dbData.liveState.botStats) dbData.liveState.botStats = {};
+    if (!dbData.liveState.pairCooldowns) dbData.liveState.pairCooldowns = {};
+    if (!Array.isArray(dbData.liveState.top3Pairs) || dbData.liveState.top3Pairs.length === 0) {
+        dbData.liveState.top3Pairs = ['SOLUSDT', 'SUIUSDT', 'WIFUSDT'];
+    }
+    return dbData;
+}
+
 function recomputeWalletFromTrades(dbData) {
+    ensureLiveStateIntegrity(dbData);
     let wins = 0;
     let losses = 0;
     const initCap = Number(dbData.wallet.initialCapital) || 10;
@@ -93,8 +111,8 @@ function recomputeWalletFromTrades(dbData) {
             const grossPnl = prevNet + prevFee;
             const isMerged = String(t.gridLevel || '').includes('+L2');
             const isPureLimitTp = (t.gridMode === 'MEXC_GRID_TP') && !String(t.gridLevel || '').includes('🛡️');
-            const l1Notional = (initCap * 0.06) * 15;
-            const totalNotional = isMerged ? (initCap * 0.08) * 15 : l1Notional;
+            const l1Notional = (initCap * 0.032) * 15;
+            const totalNotional = isMerged ? (initCap * 0.07) * 15 : l1Notional;
             const minOfficialFee = Number(((l1Notional * 0.0002) + (isPureLimitTp ? 0 : totalNotional * 0.0002)).toFixed(4));
             t.feeUSD = minOfficialFee;
             t.pnlUSD = Number((grossPnl - minOfficialFee).toFixed(4));
@@ -123,6 +141,7 @@ function recomputeWalletFromTrades(dbData) {
 
 // 100% Pure Real MEXC Futures Database Loader (Zero artificial history rewriting)
 function auditAndNormalizeDatabase(dbData) {
+    ensureLiveStateIntegrity(dbData);
     if (!dbData.meta || dbData.meta.engine !== 'NexusQuant GridDB v6.1 (MEXC Positive Payoff Grid)') {
         const cleanCap = 10.00;
         dbData.wallet = {
@@ -148,10 +167,10 @@ function auditAndNormalizeDatabase(dbData) {
             updatedAt: new Date().toISOString(),
             totalSavedTrades: 0
         };
-        return dbData;
+        return ensureLiveStateIntegrity(dbData);
     }
     recomputeWalletFromTrades(dbData);
-    return dbData;
+    return ensureLiveStateIntegrity(dbData);
 }
 
 function loadDatabase() {
@@ -391,10 +410,10 @@ async function fetchAllBinance24hrTickers() {
 }
 
 async function refreshServerMultiPairPrices() {
-    if (!db.liveState.prices) db.liveState.prices = {};
-    if (!db.liveState.priceHistory) db.liveState.priceHistory = {};
+    ensureLiveStateIntegrity(db);
 
     const list = await fetchAllBinance24hrTickers();
+    ensureLiveStateIntegrity(db);
     if (Array.isArray(list)) {
         list.forEach(item => {
             const sym = item.symbol;
@@ -726,13 +745,13 @@ function serverOpenPositionForPair(sym, side, reason, gridLevel = 'L1', customTp
     const activeTradingBankroll = Math.max(initCap * 0.5, (Number(db.wallet.walletBalance) || initCap) - vaultReserve);
     const baseCapital = db.gridConfig.compoundEnabled !== false ? activeTradingBankroll : initCap;
 
-    // v8.6 True-DCA Recovery Sizing (Fixes L2 Instant-Stop Bug & Restores 75%+ Win Rate):
-    // L1 (FILLED) = 4% margin | L2 (PENDING_LIMIT 0% Maker at -0.20%) = 5% margin
-    // When L2 (5%) merges with L1 (4%) at -0.20%, the new average entry drops 55.5% of the distance, leaving price only -0.088% away from Breakeven!
+    // v8.7 Safe Institutional Martingale (3-Stage L1->L2->L3 Rescue + Capped 1.30x Post-Loss Recovery):
+    const recoveryStep = Math.min(1, Number(db.wallet.safeMartingaleStep) || 0);
+    const recoveryMult = recoveryStep > 0 ? 1.30 : 1.00;
     const isL2Order = orderStatus === 'PENDING_LIMIT' || (gridLevel || '').startsWith('L2');
-    const orderSizePct = isL2Order ? 5 : 4;
+    const orderSizePct = (isL2Order ? 4.0 : 3.2) * recoveryMult;
     const leverage = Math.max(15, Number(db.gridConfig.leverage) || 15);
-    const margin = Math.max(isL2Order ? 0.50 : 0.40, Number((baseCapital * (orderSizePct / 100)).toFixed(4)));
+    const margin = Math.max(isL2Order ? 0.40 : 0.32, Number((baseCapital * (orderSizePct / 100)).toFixed(4)));
 
     const tpPct = customTpPct || dyn.l1TpPct;
     const slPct = 0.36;
@@ -749,7 +768,7 @@ function serverOpenPositionForPair(sym, side, reason, gridLevel = 'L1', customTp
         id: 'GRD-' + Math.floor(100000 + Math.random() * 900000),
         pair: cfg.name,
         symbol: sym,
-        gridLevel,
+        gridLevel: recoveryStep > 0 && !isL2Order ? `${gridLevel} 🔥1.3x` : gridLevel,
         orderStatus, // 'FILLED' (Executed Position) or 'PENDING_LIMIT' (Waiting on MEXC Orderbook)
         side,
         margin,
@@ -785,8 +804,8 @@ function serverOpenPositionForPair(sym, side, reason, gridLevel = 'L1', customTp
         type: 'entry',
         timestamp: Date.now(),
         message: orderStatus === 'PENDING_LIMIT'
-            ? `⏳ [MEXC LIMIT • ${cfg.name}] Posicionou Ordem Pendente ${gridLevel} ${side} (0% Maker) @ $${entryPrice.toFixed(cfg.decimals)} ➔ TP: $${tpPrice.toFixed(cfg.decimals)}`
-            : `⚡ [MEXC EXECUTADA • ${cfg.name}] Abriu ${gridLevel} ${side} (${leverage}x | Lote $${margin.toFixed(2)}) @ $${entryPrice.toFixed(cfg.decimals)} ➔ TP: $${tpPrice.toFixed(cfg.decimals)}`
+            ? `⏳ [MEXC LIMIT • ${cfg.name}] Posicionou Ordem Pendente ${pos.gridLevel} ${side} (0% Maker) @ $${entryPrice.toFixed(cfg.decimals)} ➔ TP: $${tpPrice.toFixed(cfg.decimals)}`
+            : `⚡ [MEXC EXECUTADA • ${cfg.name}] Abriu ${pos.gridLevel} ${side} (${leverage}x | Lote $${margin.toFixed(2)}) @ $${entryPrice.toFixed(cfg.decimals)} ➔ TP: $${tpPrice.toFixed(cfg.decimals)}`
     };
     recomputePerBotStats();
     saveDatabase(db);
@@ -812,9 +831,10 @@ function serverClosePosition(pos, exitPrice, pnlUSD, closeReason) {
     const makerRatePct = 0.00;
     const lev = Number(pos.leverage) || 15;
     const totalNotionalUSD = (Number(pos.margin) || 0.5) * lev;
-    const isMergedL1L2 = (pos.dcaCount || 0) > 0 || String(pos.gridLevel || '').includes('+L2');
-    // Entry Leg Fee: L1 opens as Market Taker (4/9 of merged notional, or 100% of single L1); L2 opens as Limit Maker (0.00%)
-    const l1EntryNotionalUSD = isMergedL1L2 ? (totalNotionalUSD * (4 / 9)) : totalNotionalUSD;
+    const dcaStage = Number(pos.dcaCount) || 0;
+    // Entry Leg Fee: L1 opens as Market Taker; L2 & L3 Rescue open as Limit Maker (0.00% Fee!)
+    const l1Share = dcaStage >= 2 ? 0.28 : dcaStage === 1 ? 0.44 : 1.00;
+    const l1EntryNotionalUSD = totalNotionalUSD * l1Share;
     const entryFeeUSD = l1EntryNotionalUSD * (takerRatePct / 100);
     // Exit Leg Fee: Fixed TP executes as resting Limit Maker (0.00%); Trailing / Breakeven / Stop-Loss execute as Market Taker (0.02%)
     const exitFeeRatePct = isLimitTpExit ? makerRatePct : takerRatePct;
@@ -843,9 +863,11 @@ function serverClosePosition(pos, exitPrice, pnlUSD, closeReason) {
     if (finalPnl >= 0) {
         db.wallet.wins = (db.wallet.wins || 0) + 1;
         db.wallet.lifetimeBotStats[symKey].wins++;
+        db.wallet.safeMartingaleStep = 0; // Reset Post-Loss Martingale back to 1.0x on Win!
     } else {
         db.wallet.losses = (db.wallet.losses || 0) + 1;
         db.wallet.lifetimeBotStats[symKey].losses++;
+        db.wallet.safeMartingaleStep = 1; // Arm 1.30x Safe Recovery Multiplier for the next cycle!
         // v8.5 Full 4-Minute Quarantine after Stop Loss (Prevents LONG->SHORT->LONG whipsaw ping-pong!)
         if (!db.liveState.pairCooldowns) db.liveState.pairCooldowns = {};
         db.liveState.pairCooldowns[symKey] = {
@@ -1101,13 +1123,14 @@ setInterval(async () => {
             continue;
         }
 
-        // B. v8.6 High-Winrate Profit Shield (Locks net profit at +0.16%/+0.19% so winning impulses NEVER reverse into Stop Losses!)
-        const isMergedL2 = (pos.dcaCount || 0) > 0 || (pos.gridLevel || '').includes('+L2');
-        const beTriggerPct = isMergedL2 ? 0.16 : 0.19;
-        const trailTriggerPct = isMergedL2 ? 0.20 : 0.23;
+        // B. v8.7 High-Winrate Profit Shield (Locks net profit at +0.13%/+0.16%/+0.18% so winning impulses NEVER reverse into Stop Losses!)
+        const dcaStage = Number(pos.dcaCount) || 0;
+        const isMergedL2 = dcaStage > 0 || (pos.gridLevel || '').includes('+L2');
+        const beTriggerPct = dcaStage >= 2 ? 0.13 : isMergedL2 ? 0.16 : 0.18;
+        const trailTriggerPct = dcaStage >= 2 ? 0.16 : isMergedL2 ? 0.20 : 0.22;
         if (diffPct >= beTriggerPct && !pos.breakevenLocked) {
             pos.breakevenLocked = true;
-            pos.lockFloorPct = Math.max(pos.lockFloorPct || 0, isMergedL2 ? 0.11 : 0.14);
+            pos.lockFloorPct = Math.max(pos.lockFloorPct || 0, dcaStage >= 2 ? 0.09 : isMergedL2 ? 0.11 : 0.13);
             if (!(pos.gridLevel || '').includes('🛡️')) {
                 pos.gridLevel = `${pos.gridLevel || 'L1'} 🛡️`;
             }
@@ -1115,7 +1138,7 @@ setInterval(async () => {
         // Stage 2: Once trade reaches trailTriggerPct, ratchet the profit floor dynamically just 0.03% behind peak!
         if (diffPct >= trailTriggerPct) {
             pos.trailingLocked = true;
-            pos.lockFloorPct = Math.max(pos.lockFloorPct || 0.16, Number((diffPct - 0.03).toFixed(4)));
+            pos.lockFloorPct = Math.max(pos.lockFloorPct || 0.15, Number((diffPct - 0.03).toFixed(4)));
         }
 
         if ((pos.breakevenLocked || pos.trailingLocked) && diffPct <= pos.lockFloorPct) {
@@ -1132,7 +1155,38 @@ setInterval(async () => {
             continue;
         }
 
-        // C. Controlled Channel Stop Loss
+        // B2. v8.7 SAFE MARTINGALE RESCUE (L3 Limit 0% Maker):
+        // When L1+L2 (dcaCount === 1) pulls back to -0.22%, instead of taking a Stop Loss, execute L3 Safe Martingale (0% Maker Fee)
+        // pulling the average entry 40% closer to current price (-0.13% away) with a fast +0.18% TP / +0.13% Breakeven rescue!
+        if (dcaStage === 1 && diffPct <= -0.22) {
+            const l3Margin = Number((pos.margin * 0.65).toFixed(4));
+            const newTotalMargin = Number((pos.margin + l3Margin).toFixed(4));
+            pos.entryPrice = ((pos.entryPrice * pos.margin) + (price * l3Margin)) / newTotalMargin;
+            pos.margin = newTotalMargin;
+            pos.dcaCount = 2;
+            pos.wasPendingLimit = true;
+            pos.tpPct = 0.18; // Fast +0.18% Limit TP rescue!
+            pos.slPct = 0.22; // Hard safety stop -0.22% below new L1+L2+L3 average entry
+            pos.justMergedAt = Date.now();
+            pos.tpPrice = pos.side === 'LONG'
+                ? pos.entryPrice * (1 + pos.tpPct / 100)
+                : pos.entryPrice * (1 - pos.tpPct / 100);
+            pos.slPrice = pos.side === 'LONG'
+                ? pos.entryPrice * (1 - pos.slPct / 100)
+                : pos.entryPrice * (1 + pos.slPct / 100);
+            if (!(pos.gridLevel || '').includes('+L3')) {
+                pos.gridLevel = (pos.gridLevel || 'L1+L2').replace('L1+L2', 'L1+L2+L3⚡');
+            }
+            db.liveState.lastEvent = {
+                id: pos.id + '-L3-MARTINGALE',
+                type: 'entry',
+                timestamp: Date.now(),
+                message: `🛡️ [MARTINGALE SEGURO L3 • 0% TAXA] ${pos.pair} ativou Resgate Institucional @ $${price.toFixed(cfg.decimals)}! Novo Preço Médio colado (-0.13%): $${pos.entryPrice.toFixed(cfg.decimals)} ➔ Saída Rápida no Lucro!`
+            };
+            continue;
+        }
+
+        // C. Controlled Channel Stop Loss (Hard Safety Stop after L3 Martingale Rescue)
         if (diffPct <= -pos.slPct) {
             const cappedLossPct = -pos.slPct;
             const slExitPrice = pos.side === 'LONG'
