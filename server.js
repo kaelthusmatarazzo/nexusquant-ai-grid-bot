@@ -80,6 +80,9 @@ const defaultDB = {
 function recomputeWalletFromTrades(dbData) {
     let wins = 0;
     let losses = 0;
+    if ((!dbData.gridConfig || !dbData.gridConfig.mexcConnected) && Number(dbData.wallet.initialCapital) === 100) {
+        dbData.wallet.initialCapital = 10.00;
+    }
     const initCap = Number(dbData.wallet.initialCapital) || 10;
     const withdrawn = Number(dbData.wallet.totalWithdrawn) || 0;
     let runningBalance = initCap;
@@ -87,6 +90,19 @@ function recomputeWalletFromTrades(dbData) {
     const chronological = [...(dbData.trades || [])].reverse();
     for (let i = 0; i < chronological.length; i++) {
         const t = chronological[i];
+        const prevNet = Number(t.pnlUSD) || 0;
+        const prevFee = Number(t.feeUSD) || 0;
+        const grossPnl = prevNet + prevFee;
+        const isMerged = String(t.gridLevel || '').includes('+L2');
+        const isPureLimitTp = (t.gridMode === 'MEXC_GRID_TP') && !String(t.gridLevel || '').includes('🛡️');
+        const l1Notional = (initCap * 0.05) * 15; // $7.50 on $10 bankroll
+        const totalNotional = isMerged ? (initCap * 0.09) * 15 : l1Notional;
+        const minOfficialFee = Number(((l1Notional * 0.0002) + (isPureLimitTp ? 0 : totalNotional * 0.0002)).toFixed(4));
+        if (prevFee < minOfficialFee) {
+            t.feeUSD = minOfficialFee;
+            t.pnlUSD = Number((grossPnl - minOfficialFee).toFixed(4));
+            t.pnlBRL = Number((t.pnlUSD * 5.80).toFixed(4));
+        }
         const pnl = Number(t.pnlUSD) || 0;
         if (pnl >= 0) wins++;
         else losses++;
@@ -775,6 +791,7 @@ function serverOpenPositionForPair(sym, side, reason, gridLevel = 'L1', customTp
 }
 
 function serverClosePosition(pos, exitPrice, pnlUSD, closeReason) {
+    const isLimitTpExit = String(closeReason || '').includes('TP REAL MEXC');
     if (db.gridConfig && db.gridConfig.mexcConnected && pos.orderStatus === 'FILLED') {
         dispatchRealMexcOrder({
             sym: pos.symbol || 'SOLUSDT',
@@ -783,17 +800,24 @@ function serverClosePosition(pos, exitPrice, pnlUSD, closeReason) {
             marginUSD: pos.margin || 1.0,
             leverage: pos.leverage || 15,
             price: exitPrice,
-            isLimit: false
+            isLimit: isLimitTpExit
         }).catch(() => {});
     }
-    // 100% Exact MEXC Futures Fee Accounting:
-    const isPureMakerLimit = (pos.gridLevel || '').startsWith('L2') || pos.wasPendingLimit === true;
-    let feeRatePct = isPureMakerLimit ? 0.00 : 0.01;
-    if (db.gridConfig && db.gridConfig.exchangeFeeMode === 'BINANCE_MAKER') {
-        feeRatePct = 0.04;
-    }
-    const notionalUSD = (Number(pos.margin) || 1) * (Number(pos.leverage) || 12);
-    const feeUSD = Number((notionalUSD * (feeRatePct / 100)).toFixed(4));
+    // 100% Official MEXC Futures Fee Accounting (Per-Leg Exact Calculation):
+    // Standard MEXC Futures: Maker (Limit Order) = 0.00% | Taker (Market Order) = 0.02% (or 0.01% with MX deduction)
+    const takerRatePct = (db.gridConfig && db.gridConfig.exchangeFeeMode === 'BINANCE_MAKER') ? 0.04 : 0.02;
+    const makerRatePct = 0.00;
+    const lev = Number(pos.leverage) || 15;
+    const totalNotionalUSD = (Number(pos.margin) || 0.5) * lev;
+    const isMergedL1L2 = (pos.dcaCount || 0) > 0 || String(pos.gridLevel || '').includes('+L2');
+    // Entry Leg Fee: L1 opens as Market Taker (5/9 of merged notional, or 100% of single L1); L2 opens as Limit Maker (0.00%)
+    const l1EntryNotionalUSD = isMergedL1L2 ? (totalNotionalUSD * (5 / 9)) : totalNotionalUSD;
+    const entryFeeUSD = l1EntryNotionalUSD * (takerRatePct / 100);
+    // Exit Leg Fee: Fixed TP executes as resting Limit Maker (0.00%); Trailing / Breakeven / Stop-Loss execute as Market Taker (0.02%)
+    const exitFeeRatePct = isLimitTpExit ? makerRatePct : takerRatePct;
+    const exitFeeUSD = totalNotionalUSD * (exitFeeRatePct / 100);
+
+    const feeUSD = Number((entryFeeUSD + exitFeeUSD).toFixed(4));
     const finalPnl = Number((pnlUSD - feeUSD).toFixed(4));
 
     db.wallet.walletBalance = Number((db.wallet.walletBalance + finalPnl).toFixed(4));
@@ -1060,22 +1084,26 @@ setInterval(async () => {
             ? ((price - pos.entryPrice) / pos.entryPrice) * 100
             : ((pos.entryPrice - price) / pos.entryPrice) * 100;
 
-        // A. Real Price hit this Filled Position's Take Profit!
+        // A. Real Price hit this Filled Position's Take Profit (Resting Limit Order on MEXC Book -> Fills at exact tpPrice)!
         if (diffPct >= pos.tpPct) {
-            const exactPnlUSD = pos.margin * ((diffPct * pos.leverage) / 100);
-            serverClosePosition(pos, price, exactPnlUSD, `TP REAL MEXC • ${pos.gridLevel || 'L1'}`);
+            const executedTpPct = Number(pos.tpPct) || 0.28;
+            const exactTpExitPrice = pos.side === 'LONG'
+                ? pos.entryPrice * (1 + executedTpPct / 100)
+                : pos.entryPrice * (1 - executedTpPct / 100);
+            const exactPnlUSD = pos.margin * ((executedTpPct * pos.leverage) / 100);
+            serverClosePosition(pos, exactTpExitPrice, exactPnlUSD, `TP REAL MEXC • ${pos.gridLevel || 'L1'}`);
             const idxNow = db.openPositions.findIndex(p => p.id === pos.id);
             if (idxNow !== -1) db.openPositions.splice(idxNow, 1);
             continue;
         }
 
-        // B. v8.0 High-Floor Breakeven Shield (+0.20% trigger -> locks +0.15% floor = +$0.023 to +$0.035 profit, NEVER $0.005!)
+        // B. v8.4 True-Execution Breakeven & Trailing Shield (Accounts for 0.04% Round-Trip Taker Fee + 0.01% Market Slippage)
         const isMergedL2 = (pos.dcaCount || 0) > 0 || (pos.gridLevel || '').includes('+L2');
-        const beTriggerPct = isMergedL2 ? 0.17 : 0.20;
-        const trailTriggerPct = isMergedL2 ? 0.21 : 0.24;
+        const beTriggerPct = isMergedL2 ? 0.19 : 0.22;
+        const trailTriggerPct = isMergedL2 ? 0.23 : 0.26;
         if (diffPct >= beTriggerPct && !pos.breakevenLocked) {
             pos.breakevenLocked = true;
-            pos.lockFloorPct = Math.max(pos.lockFloorPct || 0, isMergedL2 ? 0.13 : 0.15);
+            pos.lockFloorPct = Math.max(pos.lockFloorPct || 0, isMergedL2 ? 0.15 : 0.17);
             if (!(pos.gridLevel || '').includes('🛡️')) {
                 pos.gridLevel = `${pos.gridLevel || 'L1'} 🛡️`;
             }
@@ -1083,15 +1111,16 @@ setInterval(async () => {
         // Stage 2: Once trade reaches trailTriggerPct, ratchet the profit floor dynamically just 0.04% behind peak!
         if (diffPct >= trailTriggerPct) {
             pos.trailingLocked = true;
-            pos.lockFloorPct = Math.max(pos.lockFloorPct || 0.16, Number((diffPct - 0.04).toFixed(4)));
+            pos.lockFloorPct = Math.max(pos.lockFloorPct || 0.18, Number((diffPct - 0.04).toFixed(4)));
         }
 
         if ((pos.breakevenLocked || pos.trailingLocked) && diffPct <= pos.lockFloorPct) {
-            const executedPct = Math.max(pos.lockFloorPct, diffPct);
+            // Real Market Execution: Fills at the actual crossed market price (Math.min) minus 0.01% book slippage
+            const realisticMarketPct = Math.max(0.06, Math.min(pos.lockFloorPct, diffPct) - 0.01);
             const lockExitPrice = pos.side === 'LONG'
-                ? pos.entryPrice * (1 + executedPct / 100)
-                : pos.entryPrice * (1 - executedPct / 100);
-            const lockPnlUSD = pos.margin * ((executedPct * pos.leverage) / 100);
+                ? pos.entryPrice * (1 + realisticMarketPct / 100)
+                : pos.entryPrice * (1 - realisticMarketPct / 100);
+            const lockPnlUSD = pos.margin * ((realisticMarketPct * pos.leverage) / 100);
             const closeLabel = pos.trailingLocked ? `TRAILING TP MEXC • ${pos.gridLevel || 'L1'}` : `BREAKEVEN BLINDADO • ${pos.gridLevel || 'L1'}`;
             serverClosePosition(pos, lockExitPrice, lockPnlUSD, closeLabel);
             const idxNow = db.openPositions.findIndex(p => p.id === pos.id);
