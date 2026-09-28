@@ -92,13 +92,13 @@ function recomputeWalletFromTrades(dbData) {
         const t = chronological[i];
         const prevNet = Number(t.pnlUSD) || 0;
         const prevFee = Number(t.feeUSD) || 0;
-        const grossPnl = prevNet + prevFee;
-        const isMerged = String(t.gridLevel || '').includes('+L2');
-        const isPureLimitTp = (t.gridMode === 'MEXC_GRID_TP') && !String(t.gridLevel || '').includes('🛡️');
-        const l1Notional = (initCap * 0.05) * 15; // $7.50 on $10 bankroll
-        const totalNotional = isMerged ? (initCap * 0.09) * 15 : l1Notional;
-        const minOfficialFee = Number(((l1Notional * 0.0002) + (isPureLimitTp ? 0 : totalNotional * 0.0002)).toFixed(4));
-        if (prevFee < minOfficialFee) {
+        if (prevFee <= 0) {
+            const grossPnl = prevNet + prevFee;
+            const isMerged = String(t.gridLevel || '').includes('+L2');
+            const isPureLimitTp = (t.gridMode === 'MEXC_GRID_TP') && !String(t.gridLevel || '').includes('🛡️');
+            const l1Notional = (initCap * 0.06) * 15;
+            const totalNotional = isMerged ? (initCap * 0.08) * 15 : l1Notional;
+            const minOfficialFee = Number(((l1Notional * 0.0002) + (isPureLimitTp ? 0 : totalNotional * 0.0002)).toFixed(4));
             t.feeUSD = minOfficialFee;
             t.pnlUSD = Number((grossPnl - minOfficialFee).toFixed(4));
             t.pnlBRL = Number((t.pnlUSD * 5.80).toFixed(4));
@@ -435,9 +435,14 @@ async function refreshServerMultiPairPrices() {
                         perfAdjustment = 3.5;   // Reward high-win-rate pair
                     }
                 }
+                const cd = db.liveState && db.liveState.pairCooldowns && db.liveState.pairCooldowns[sym];
+                const inCooldown = cd && cd.pauseUntil && Date.now() < cd.pauseUntil;
+                if (inCooldown) {
+                    perfAdjustment -= 25.0; // Evict stopped pair during 4m quarantine
+                }
 
                 const rawScore = 72 + Math.min(17.5, rangePct * 2.35) + (whipsawRatio * 0.75) + liquidityBonus - runawayPenalty + perfAdjustment;
-                cfg.gridScore = Math.min(99.6, Math.max(65.0, rawScore));
+                cfg.gridScore = Math.min(99.6, Math.max(50.0, rawScore));
                 cfg.atrPct = Math.max(1.4, rangePct);
             }
         });
@@ -460,6 +465,13 @@ async function refreshServerMultiPairPrices() {
     for (const s of prevTop3) {
         if (activeFilledSyms.has(s) && stickyTop3.length < 3) {
             stickyTop3.push(s);
+        }
+    }
+    for (const r of ranked) {
+        const cd = db.liveState && db.liveState.pairCooldowns && db.liveState.pairCooldowns[r.symbol];
+        const inCooldown = cd && cd.pauseUntil && Date.now() < cd.pauseUntil;
+        if (!inCooldown && !stickyTop3.includes(r.symbol) && stickyTop3.length < 3) {
+            stickyTop3.push(r.symbol);
         }
     }
     for (const r of ranked) {
@@ -520,12 +532,12 @@ function sendTelegramAlert(messageText) {
 function getDynamicGridParams(sym) {
     const cfg = PAIR_CONFIGS[sym] || PAIR_CONFIGS.SOLUSDT;
     const atr = cfg.atrPct || 4.0;
-    const volFactor = Math.max(0.92, Math.min(1.18, atr / 4.2));
+    const volFactor = Math.max(0.95, Math.min(1.20, atr / 4.2));
     return {
-        l1TpPct: Number((0.30 * volFactor).toFixed(3)),        // +0.28% to +0.35% TP on L1
-        l2TpPct: Number((0.24 * volFactor).toFixed(3)),        // +0.22% to +0.28% TP after L2 Limit Maker merge
-        l3TpPct: Number((0.20 * volFactor).toFixed(3)),
-        staggerStepPct: 0.18                                   // -0.18% L2 Limit Order so 1m wicks don't trigger premature L2 merge
+        l1TpPct: Number((0.36 * volFactor).toFixed(3)),        // +0.34% to +0.42% TP on L1 ($9.00 notional -> +$0.0306 to +$0.0360 Net Win!)
+        l2TpPct: Number((0.30 * volFactor).toFixed(3)),        // +0.29% to +0.35% TP after L2 Limit Maker merge ($12.00 notional -> +$0.0340 Net Win!)
+        l3TpPct: Number((0.25 * volFactor).toFixed(3)),
+        staggerStepPct: 0.28                                   // -0.28% Deep L2 Limit Order so normal pullbacks don't bloat losing trade size
     };
 }
 
@@ -556,29 +568,23 @@ function computeEma(values, period) {
     return ema;
 }
 
-// Improvement #4: Single-Direction Trend Filter (EMA4 vs EMA11 + Damped RSI-1m + Cooldown Awareness)
+// v8.5 Trend-Confirmed Direction Filter (Removed Ping-Pong Auto-Flip that caused LONG->SHORT->LONG whipsaw stops)
 function computeSmartBotDirection(sym, rankIdx, btcShieldActive) {
     if (btcShieldActive) return 'SHORT';
     const hist = (db.liveState.priceHistory && db.liveState.priceHistory[sym]) || [];
     const rsi = computePairRsi1m(sym);
 
-    // If a cooldown is blocking a specific side after a Stop Loss, flip direction
-    const cd = (db.liveState.pairCooldowns && db.liveState.pairCooldowns[sym]) || null;
-    const flipExp = cd ? (cd.flipUntil || cd.FlipUntil || 0) : 0;
-    if (cd && flipExp && Date.now() < flipExp && cd.blockedSide) {
-        return cd.blockedSide === 'LONG' ? 'SHORT' : 'LONG';
+    if (hist.length >= 8) {
+        const emaFast = computeEma(hist.slice(-8), 4);
+        const emaSlow = computeEma(hist.slice(-20), 12);
+        const momentumPct = ((hist[hist.length - 1] - hist[Math.max(0, hist.length - 6)]) / hist[Math.max(0, hist.length - 6)]) * 100;
+        if (rsi <= 32 && momentumPct > -0.15) return 'LONG';   // Confirmed oversold bounce
+        if (rsi >= 68 && momentumPct < 0.15) return 'SHORT';   // Confirmed overbought rejection
+        if (emaFast > emaSlow * 1.00015 && momentumPct >= 0) return 'LONG';
+        if (emaFast < emaSlow * 0.99985 && momentumPct <= 0) return 'SHORT';
     }
-
-    if (hist.length >= 6) {
-        const emaFast = computeEma(hist.slice(-10), 4);
-        const emaSlow = computeEma(hist.slice(-22), 11);
-        if (rsi <= 34) return 'LONG';   // True oversold bounce
-        if (rsi >= 66) return 'SHORT';  // True overbought exhaustion
-        if (emaFast > emaSlow * 1.00005) return 'LONG';
-        if (emaFast < emaSlow * 0.99995) return 'SHORT';
-    }
-    if (rsi >= 56) return 'SHORT';
-    if (rsi <= 44) return 'LONG';
+    if (rsi >= 58) return 'SHORT';
+    if (rsi <= 42) return 'LONG';
     return (rankIdx === 1) ? 'SHORT' : 'LONG';
 }
 
@@ -723,16 +729,16 @@ function serverOpenPositionForPair(sym, side, reason, gridLevel = 'L1', customTp
     const activeTradingBankroll = Math.max(initCap * 0.5, (Number(db.wallet.walletBalance) || initCap) - vaultReserve);
     const baseCapital = db.gridConfig.compoundEnabled !== false ? activeTradingBankroll : initCap;
 
-    // v8.2 Wide-Channel DCA Sizing:
-    // L1 (FILLED) = 5% margin ($0.50 on $10 bankroll, slPct = 0.36% = -$0.027 max loss)
-    // L2 (PENDING_LIMIT 0% Maker Fee) = 4% margin ($0.40 on $10 bankroll -> L1+L2 combined = $0.90 margin, slPct = 0.22% = -$0.0297 max loss & -0.30% total channel!)
+    // v8.5 Positive Payoff Sizing (Fixes L2 Loss Asymmetry):
+    // L1 (FILLED) = 6% margin ($0.60 on $10 bankroll = $9.00 notional -> TP +0.36% = +$0.0306 Net Win!)
+    // L2 (PENDING_LIMIT 0% Maker Fee at -0.28% deep pullback) = 2% margin ($0.20 = $3.00 notional -> combined $12.00 notional, max SL -0.20% = -$0.0278 Net Loss < +$0.0306 Win!)
     const isL2Order = orderStatus === 'PENDING_LIMIT' || (gridLevel || '').startsWith('L2');
-    const orderSizePct = isL2Order ? 4 : 5;
+    const orderSizePct = isL2Order ? 2 : 6;
     const leverage = Math.max(15, Number(db.gridConfig.leverage) || 15);
-    const margin = Math.max(isL2Order ? 0.40 : 0.50, Number((baseCapital * (orderSizePct / 100)).toFixed(4)));
+    const margin = Math.max(isL2Order ? 0.20 : 0.60, Number((baseCapital * (orderSizePct / 100)).toFixed(4)));
 
     const tpPct = customTpPct || dyn.l1TpPct;
-    const slPct = 0.36;
+    const slPct = 0.30;
 
     const tpPrice = side === 'LONG'
         ? entryPrice * (1 + tpPct / 100)
@@ -843,12 +849,12 @@ function serverClosePosition(pos, exitPrice, pnlUSD, closeReason) {
     } else {
         db.wallet.losses = (db.wallet.losses || 0) + 1;
         db.wallet.lifetimeBotStats[symKey].losses++;
-        // Improvement #2: Anti-Whipsaw Cooldown after Stop Loss
+        // v8.5 Full 4-Minute Quarantine after Stop Loss (Prevents LONG->SHORT->LONG whipsaw ping-pong!)
         if (!db.liveState.pairCooldowns) db.liveState.pairCooldowns = {};
         db.liveState.pairCooldowns[symKey] = {
-            pauseUntil: Date.now() + 45000,
-            FlipUntil: Date.now() + 180000,
-            blockedSide: pos.side,
+            pauseUntil: Date.now() + 240000,
+            FlipUntil: 0,
+            blockedSide: null,
             lastStopAt: new Date().toISOString()
         };
     }
@@ -1022,9 +1028,9 @@ setInterval(async () => {
                 primaryL1.margin = combinedMargin;
                 primaryL1.wasPendingLimit = true; // 0.00% Maker Fee on MEXC!
                 primaryL1.dcaCount = (primaryL1.dcaCount || 0) + 1;
-                primaryL1.tpPct = 0.25; // +0.25% on $0.90 margin x 15x ($13.50 notional) = +$0.0338 Win (0% Maker Fee)!
-                // Strictly cap L1+L2 Stop Loss at 0.22% from new average entry ($13.50 x -0.22% = -$0.0297 Max Loss, with -0.30% total channel width!)
-                primaryL1.slPct = 0.22;
+                primaryL1.tpPct = 0.30; // +0.30% on $0.80 margin x 15x ($12.00 notional) = +$0.0360 Gross / +$0.0342 Net Win (0% Maker Exit Fee)!
+                // Strictly cap L1+L2 Stop Loss at 0.20% from new average entry ($12.00 x -0.20% = -$0.0240 Gross / -$0.0278 Net Max Loss < Single L1 Win!)
+                primaryL1.slPct = 0.20;
                 primaryL1.justMergedAt = Date.now();
                 primaryL1.tpPrice = primaryL1.side === 'LONG'
                     ? primaryL1.entryPrice * (1 + primaryL1.tpPct / 100)
@@ -1040,7 +1046,7 @@ setInterval(async () => {
                     id: pos.id + '-FILL-MERGE',
                     type: 'entry',
                     timestamp: Date.now(),
-                    message: `⚡ [MEXC LIMIT L2 EXECUTADA 0% TAXA] ${pos.pair} absorveu recuo @ $${limitFillPrice.toFixed(cfg.decimals)}! Novo Preço Médio: $${primaryL1.entryPrice.toFixed(cfg.decimals)} ➔ Alvo Lucro: +$${(primaryL1.margin * primaryL1.leverage * (primaryL1.tpPct / 100)).toFixed(2)}`
+                    message: `⚡ [MEXC LIMIT L2 EXECUTADA 0% TAXA] ${pos.pair} absorveu recuo profundo @ $${limitFillPrice.toFixed(cfg.decimals)}! Novo Preço Médio: $${primaryL1.entryPrice.toFixed(cfg.decimals)} ➔ Alvo Lucro: +$${(primaryL1.margin * primaryL1.leverage * (primaryL1.tpPct / 100)).toFixed(2)}`
                 };
                 continue;
             }
@@ -1049,7 +1055,7 @@ setInterval(async () => {
             const distFromMarketPct = pos.side === 'LONG'
                 ? ((price - pos.entryPrice) / pos.entryPrice) * 100
                 : ((pos.entryPrice - price) / pos.entryPrice) * 100;
-            if (distFromMarketPct >= 0.26) {
+            if (distFromMarketPct >= 0.36) {
                 const dyn = getDynamicGridParams(sym);
                 pos.entryPrice = pos.side === 'LONG'
                     ? price * (1 - dyn.staggerStepPct / 100)
@@ -1071,7 +1077,7 @@ setInterval(async () => {
 
         if (!top3.includes(sym) && !pos.reduceOnly) {
             pos.reduceOnly = true;
-            pos.tpPct = Math.max(0.22, pos.tpPct || 0.25);
+            pos.tpPct = Math.max(0.28, pos.tpPct || 0.32);
             pos.tpPrice = pos.side === 'LONG'
                 ? pos.entryPrice * (1 + pos.tpPct / 100)
                 : pos.entryPrice * (1 - pos.tpPct / 100);
@@ -1086,7 +1092,7 @@ setInterval(async () => {
 
         // A. Real Price hit this Filled Position's Take Profit (Resting Limit Order on MEXC Book -> Fills at exact tpPrice)!
         if (diffPct >= pos.tpPct) {
-            const executedTpPct = Number(pos.tpPct) || 0.28;
+            const executedTpPct = Number(pos.tpPct) || 0.35;
             const exactTpExitPrice = pos.side === 'LONG'
                 ? pos.entryPrice * (1 + executedTpPct / 100)
                 : pos.entryPrice * (1 - executedTpPct / 100);
@@ -1097,13 +1103,13 @@ setInterval(async () => {
             continue;
         }
 
-        // B. v8.4 True-Execution Breakeven & Trailing Shield (Accounts for 0.04% Round-Trip Taker Fee + 0.01% Market Slippage)
+        // B. v8.5 High-Threshold Trailing Lock (Does NOT choke winners at +0.16%! Only arms near TP at +0.30% to lock +$0.021+ net profit!)
         const isMergedL2 = (pos.dcaCount || 0) > 0 || (pos.gridLevel || '').includes('+L2');
-        const beTriggerPct = isMergedL2 ? 0.19 : 0.22;
-        const trailTriggerPct = isMergedL2 ? 0.23 : 0.26;
+        const beTriggerPct = isMergedL2 ? 0.26 : 0.30;
+        const trailTriggerPct = isMergedL2 ? 0.28 : 0.33;
         if (diffPct >= beTriggerPct && !pos.breakevenLocked) {
             pos.breakevenLocked = true;
-            pos.lockFloorPct = Math.max(pos.lockFloorPct || 0, isMergedL2 ? 0.15 : 0.17);
+            pos.lockFloorPct = Math.max(pos.lockFloorPct || 0, isMergedL2 ? 0.21 : 0.24);
             if (!(pos.gridLevel || '').includes('🛡️')) {
                 pos.gridLevel = `${pos.gridLevel || 'L1'} 🛡️`;
             }
@@ -1111,7 +1117,7 @@ setInterval(async () => {
         // Stage 2: Once trade reaches trailTriggerPct, ratchet the profit floor dynamically just 0.04% behind peak!
         if (diffPct >= trailTriggerPct) {
             pos.trailingLocked = true;
-            pos.lockFloorPct = Math.max(pos.lockFloorPct || 0.18, Number((diffPct - 0.04).toFixed(4)));
+            pos.lockFloorPct = Math.max(pos.lockFloorPct || 0.25, Number((diffPct - 0.04).toFixed(4)));
         }
 
         if ((pos.breakevenLocked || pos.trailingLocked) && diffPct <= pos.lockFloorPct) {
