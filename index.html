@@ -80,9 +80,9 @@
         <!-- Global Controls (100% Real-Time Only) -->
         <div class="header-actions">
             <div class="ticker-metric">
-                <span class="metric-label">SINCRONIA DE TEMPO</span>
-                <span class="feed-badge online mono" title="Operando exclusivamente em Tempo Real (1:1) com as velas de 1 minuto da Binance">
-                    <span class="status-dot"></span> TEMPO REAL 1m (1:1)
+                <span class="metric-label">TEMPO RODANDO (24/7)</span>
+                <span class="feed-badge online mono" id="botUptimeBadge" title="Tempo contínuo de operação do servidor 24/7 desde o início da sessão atual">
+                    <span class="status-dot"></span> <span id="botUptimeCounter">⏱️ 00d 00h 00m 00s</span>
                 </span>
             </div>
 
@@ -128,7 +128,7 @@
         <div class="kpi-card highlight-card">
             <div class="kpi-header">
                 <span>SALDO TOTAL DA BANCA</span>
-                <span class="tag-compound" id="compoundBadge">Juros Compostos Auto</span>
+                <span class="tag-compound" id="compoundBadge" title="Tempo contínuo que o robô está operando na nuvem">⏱️ <span id="botUptimeKpiVal">00d 00h 00m 00s</span></span>
             </div>
             <div class="kpi-main mono" id="totalBalance">$10.00</div>
             <div class="kpi-sub">
