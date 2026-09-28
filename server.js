@@ -405,11 +405,30 @@ async function refreshServerMultiPairPrices() {
     }
 
     // Rank all 14 pairs and select Top 3 Best Grid Pairs (#1, #2, #3)
+    // Fix Bug #3: Sticky Top-3 Lock — NEVER kick a pair out of Top 3 while it has an active FILLED position!
     const ranked = Object.keys(PAIR_CONFIGS)
         .map(sym => ({ symbol: sym, ...PAIR_CONFIGS[sym] }))
         .sort((a, b) => b.gridScore - a.gridScore);
 
-    db.liveState.top3Pairs = ranked.slice(0, 3).map(r => r.symbol);
+    const activeFilledSyms = new Set(
+        (db.openPositions || [])
+            .filter(p => p.orderStatus === 'FILLED')
+            .map(p => p.symbol)
+    );
+    const prevTop3 = Array.isArray(db.liveState.top3Pairs) ? db.liveState.top3Pairs : [];
+    const stickyTop3 = [];
+
+    for (const s of prevTop3) {
+        if (activeFilledSyms.has(s) && stickyTop3.length < 3) {
+            stickyTop3.push(s);
+        }
+    }
+    for (const r of ranked) {
+        if (!stickyTop3.includes(r.symbol) && stickyTop3.length < 3) {
+            stickyTop3.push(r.symbol);
+        }
+    }
+    db.liveState.top3Pairs = stickyTop3;
 
     const viewedSym = db.gridConfig.pair || db.liveState.top3Pairs[0] || 'SOLUSDT';
     const viewedPrice = db.liveState.prices[viewedSym] || PAIR_CONFIGS[viewedSym].basePrice;
@@ -462,14 +481,14 @@ function sendTelegramAlert(messageText) {
 function getDynamicGridParams(sym) {
     const cfg = PAIR_CONFIGS[sym] || PAIR_CONFIGS.SOLUSDT;
     const atr = cfg.atrPct || 4.0;
-    const volFactor = Math.max(0.85, Math.min(1.30, atr / 4.2));
-    // Positive Risk/Reward Calibration for MEXC Futures:
-    // L1 TP = 0.24% to 0.32% price move (at 15x leverage on $1.00 margin = +$0.04 to +$0.06 profit per win on a $10 bankroll!)
+    const volFactor = Math.max(0.90, Math.min(1.25, atr / 4.2));
+    // Positive Expectancy Payoff Calibration (v8.0):
+    // Win (+0.28% to +0.35% = +$0.042 to +$0.053) is ALWAYS larger than Max Stop Loss (-$0.028 to -$0.029)!
     return {
-        l1TpPct: Number((0.25 * volFactor).toFixed(3)),        // 0.21% to 0.32% (Pays +$0.04 to +$0.06 per win on $10 bankroll)
-        l2TpPct: Number((0.20 * volFactor).toFixed(3)),        // 0.17% to 0.26% after L2 Limit Maker merge
-        l3TpPct: Number((0.16 * volFactor).toFixed(3)),        // 0.14% to 0.21% after L3 Defense merge
-        staggerStepPct: Number((0.18 * volFactor).toFixed(4))  // L2 Pending Limit placed at -0.18% (real support/resistance step)
+        l1TpPct: Number((0.28 * volFactor).toFixed(3)),        // +0.25% to +0.35% TP on L1 ($1.00 margin x 15x = +$0.038 to +$0.053 Win)
+        l2TpPct: Number((0.24 * volFactor).toFixed(3)),        // +0.22% to +0.30% TP after L2 Limit Maker merge ($1.40 margin x 15x = +$0.046 to +$0.063 Win)
+        l3TpPct: Number((0.20 * volFactor).toFixed(3)),
+        staggerStepPct: Number((0.14 * volFactor).toFixed(4))  // L2 Pending Limit placed at -0.14% to -0.175%
     };
 }
 
@@ -663,13 +682,17 @@ function serverOpenPositionForPair(sym, side, reason, gridLevel = 'L1', customTp
     const activeTradingBankroll = Math.max(initCap * 0.5, (Number(db.wallet.walletBalance) || initCap) - vaultReserve);
     const baseCapital = db.gridConfig.compoundEnabled !== false ? activeTradingBankroll : initCap;
 
-    // 10% margin per Bot L1 line at 15x leverage ($1.00 margin = $15.00 position on a $10.00 bankroll!)
-    const orderSizePct = 10;
+    // v8.0 Positive Expectancy Sizing:
+    // L1 (FILLED) = 10% margin ($1.00 on $10 bankroll)
+    // L2 (PENDING_LIMIT 0% Maker Fee) = 4% margin ($0.40 on $10 bankroll -> L1+L2 combined = $1.40 margin)
+    const isL2Order = orderStatus === 'PENDING_LIMIT' || (gridLevel || '').startsWith('L2');
+    const orderSizePct = isL2Order ? 4 : 10;
     const leverage = Math.max(15, Number(db.gridConfig.leverage) || 15);
-    const margin = Math.max(0.50, Number((baseCapital * (orderSizePct / 100)).toFixed(4)));
+    const margin = Math.max(isL2Order ? 0.40 : 0.80, Number((baseCapital * (orderSizePct / 100)).toFixed(4)));
 
     const tpPct = customTpPct || dyn.l1TpPct;
-    const slPct = 0.28;
+    // Capped Stop Loss (0.19% on $1.00 x 15x = -$0.0285, strictly smaller than a single +$0.045 Win!)
+    const slPct = 0.19;
 
     const tpPrice = side === 'LONG'
         ? entryPrice * (1 + tpPct / 100)
@@ -889,7 +912,7 @@ function sanitizeOpenPositionsV7() {
 
 sanitizeOpenPositionsV7();
 
-// Continuous 24/7 Multi-Bot Server Loop (v7.1 Sniper Anti-Loss MEXC Futures Engine)
+// Continuous 24/7 Multi-Bot Server Loop (v8.0 Institutional Master MEXC Engine)
 setInterval(async () => {
     await refreshServerMultiPairPrices();
     if (!db.gridConfig.botRunning) return;
@@ -928,11 +951,9 @@ setInterval(async () => {
                 primaryL1.margin = combinedMargin;
                 primaryL1.wasPendingLimit = true; // 0.00% Maker Fee on MEXC!
                 primaryL1.dcaCount = (primaryL1.dcaCount || 0) + 1;
-                primaryL1.tpPct = 0.22;
-                // Fix Bug #1: At the exact moment L2 merges, price is already -(staggerStepPct / 2)% from the new average entryPrice!
-                // Give a true 0.16% breathing room BELOW L2's execution price so a 0.02% tick doesn't prematurely stop out L1+L2!
-                const halfStep = (dyn.staggerStepPct || 0.20) / 2;
-                primaryL1.slPct = Number((halfStep + 0.16).toFixed(3)); // ~0.27% from average entry = 0.16% real room below L2!
+                primaryL1.tpPct = 0.24; // +0.24% on $1.40 margin x 15x ($21 notional) = +$0.0504 Win (0% Maker Fee)!
+                // Strictly cap L1+L2 Stop Loss at 0.14% from new average entry ($21 x -0.14% = -$0.0294 Max Loss, smaller than +$0.0504 Win!)
+                primaryL1.slPct = 0.14;
                 primaryL1.tpPrice = primaryL1.side === 'LONG'
                     ? primaryL1.entryPrice * (1 + primaryL1.tpPct / 100)
                     : primaryL1.entryPrice * (1 - primaryL1.tpPct / 100);
@@ -973,7 +994,7 @@ setInterval(async () => {
         // CASE 2: ALREADY FILLED / EXECUTED POSITION ON MEXC (Entry Price is 100% LOCKED & IMMUTABLE!)
         if (!top3.includes(sym) && !pos.reduceOnly) {
             pos.reduceOnly = true;
-            pos.tpPct = Math.max(0.18, Math.min(pos.tpPct || 0.25, 0.20));
+            pos.tpPct = Math.max(0.22, pos.tpPct || 0.25);
             pos.tpPrice = pos.side === 'LONG'
                 ? pos.entryPrice * (1 + pos.tpPct / 100)
                 : pos.entryPrice * (1 - pos.tpPct / 100);
@@ -995,21 +1016,21 @@ setInterval(async () => {
             continue;
         }
 
-        // B. Improvement #1: Two-Stage Breakeven Shield (+0.13% for L1, +0.09% for L1+L2) + Dynamic Trailing Profit Lock
+        // B. v8.0 High-Floor Breakeven Shield (+0.20% trigger -> locks +0.15% floor = +$0.023 to +$0.035 profit, NEVER $0.005!)
         const isMergedL2 = (pos.dcaCount || 0) > 0 || (pos.gridLevel || '').includes('+L2');
-        const beTriggerPct = isMergedL2 ? 0.09 : 0.13;
-        const trailTriggerPct = isMergedL2 ? 0.16 : 0.20;
+        const beTriggerPct = isMergedL2 ? 0.17 : 0.20;
+        const trailTriggerPct = isMergedL2 ? 0.21 : 0.24;
         if (diffPct >= beTriggerPct && !pos.breakevenLocked) {
             pos.breakevenLocked = true;
-            pos.lockFloorPct = Math.max(pos.lockFloorPct || 0, isMergedL2 ? 0.04 : 0.05);
+            pos.lockFloorPct = Math.max(pos.lockFloorPct || 0, isMergedL2 ? 0.13 : 0.15);
             if (!(pos.gridLevel || '').includes('🛡️')) {
                 pos.gridLevel = `${pos.gridLevel || 'L1'} 🛡️`;
             }
         }
-        // Stage 2: Once trade reaches trailTriggerPct, ratchet the profit floor dynamically just 0.05% behind peak!
+        // Stage 2: Once trade reaches trailTriggerPct, ratchet the profit floor dynamically just 0.04% behind peak!
         if (diffPct >= trailTriggerPct) {
             pos.trailingLocked = true;
-            pos.lockFloorPct = Math.max(pos.lockFloorPct || 0.12, Number((diffPct - 0.05).toFixed(4)));
+            pos.lockFloorPct = Math.max(pos.lockFloorPct || 0.16, Number((diffPct - 0.04).toFixed(4)));
         }
 
         if ((pos.breakevenLocked || pos.trailingLocked) && diffPct <= pos.lockFloorPct) {
@@ -1301,9 +1322,34 @@ const server = http.createServer(async (req, res) => {
         db.trades = [];
         db.withdrawals = [];
         db.liveState.pairCooldowns = {};
+        db.gridConfig.botRunning = true;
         recomputePerBotStats();
-        saveDatabase(db);
+        saveDatabase(db, true);
         return sendJSON(res, 200, { ok: true, db });
+    }
+
+    // 4B. POST /api/panic-close — 1-Click Emergency Kill Switch (Liquidate all 3 Bots at Market & Pause)
+    if (pathname === '/api/panic-close' && req.method === 'POST') {
+        const prices = db.liveState.prices || {};
+        let closedCount = 0;
+        for (let i = db.openPositions.length - 1; i >= 0; i--) {
+            const p = db.openPositions[i];
+            if (p.orderStatus === 'FILLED') {
+                const liveP = prices[p.symbol] || p.currentPrice || p.entryPrice;
+                const diffPct = p.side === 'LONG'
+                    ? ((liveP - p.entryPrice) / p.entryPrice) * 100
+                    : ((p.entryPrice - liveP) / p.entryPrice) * 100;
+                const pnlUSD = p.margin * ((diffPct * (p.leverage || 15)) / 100);
+                serverClosePosition(p, liveP, pnlUSD, `🚨 KILL SWITCH ZERAR TUDO • ${p.gridLevel || 'L1'}`);
+                closedCount++;
+            }
+        }
+        db.openPositions = [];
+        db.gridConfig.botRunning = false;
+        recomputePerBotStats();
+        saveDatabase(db, true);
+        sendTelegramAlert(`🚨 <b>[KILL SWITCH ACIONADO]</b>\nTodas as posições (${closedCount}) foram zeradas a mercado e os 3 Bots foram pausados com segurança. Saldo atual: $${db.wallet.walletBalance.toFixed(2)}`);
+        return sendJSON(res, 200, { ok: true, closedCount, db });
     }
 
     // 5. GET /api/export-csv — Export Database Trade History as CSV
