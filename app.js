@@ -1292,9 +1292,16 @@ function drawAllThreeMiniCharts() {
         const cfg = PAIR_CONFIGS[sym] || PAIR_CONFIGS.SOLUSDT;
         const botPositions = state.openPositions.filter(p => p.symbol === sym);
         const firstPos = botPositions[0];
-        const livePrice = (sym === state.pair && state.currentPrice > 0)
+        const realCandleLast = (state.triCandles[sym] && state.triCandles[sym].length > 0)
+            ? state.triCandles[sym][state.triCandles[sym].length - 1].close
+            : 0;
+        const rawCandidatePrice = (sym === state.pair && state.currentPrice > 0)
             ? state.currentPrice
-            : ((firstPos && firstPos.currentPrice) || (state.livePrices && state.livePrices[sym]) || cfg.basePrice);
+            : ((state.livePrices && state.livePrices[sym]) || (firstPos && firstPos.currentPrice) || realCandleLast || cfg.basePrice);
+        // If we have real klines and rawCandidatePrice deviates >3% from real kline, trust real kline price!
+        const livePrice = (realCandleLast > 0 && Math.abs(rawCandidatePrice - realCandleLast) / realCandleLast > 0.03)
+            ? realCandleLast
+            : rawCandidatePrice;
 
         // Compute Individual Bot Profit & Win/Loss Record from state.botStats or state.closedTrades
         const serverStat = (state.botStats && state.botStats[sym]) || null;
@@ -1312,14 +1319,20 @@ function drawAllThreeMiniCharts() {
             });
         }
 
-        // Compute total open PnL across all grid lines (L1, L2, L3) of this Bot
+        // Compute total open PnL across all grid lines (L1, L2) of this Bot
         let botOpenPnlUSD = 0;
         let botTotalMargin = 0;
         botPositions.forEach(p => {
+            if (p.orderStatus === 'PENDING_LIMIT') {
+                botTotalMargin += p.margin;
+                return;
+            }
             const dPct = p.side === 'LONG'
                 ? ((livePrice - p.entryPrice) / p.entryPrice) * 100
                 : ((p.entryPrice - livePrice) / p.entryPrice) * 100;
-            botOpenPnlUSD += p.margin * ((dPct * (p.leverage || 12)) / 100);
+            // Clamp display outlier if legacy order is being replaced
+            const safeDPct = Math.max(-1.5, Math.min(1.5, dPct));
+            botOpenPnlUSD += p.margin * ((safeDPct * (p.leverage || 12)) / 100);
             botTotalMargin += p.margin;
         });
 
@@ -1391,9 +1404,11 @@ function drawAllThreeMiniCharts() {
         }
         if (candles.length > 0) {
             const lastC = { ...candles[candles.length - 1] };
-            lastC.close = livePrice;
-            lastC.high = Math.max(lastC.high, livePrice);
-            lastC.low = Math.min(lastC.low, livePrice);
+            if (Math.abs(livePrice - lastC.close) / Math.max(1e-9, lastC.close) <= 0.02) {
+                lastC.close = livePrice;
+                lastC.high = Math.max(lastC.high, livePrice);
+                lastC.low = Math.min(lastC.low, livePrice);
+            }
             candles[candles.length - 1] = lastC;
         } else {
             candles = Array.from({ length: 16 }, (_, k) => ({
@@ -1411,8 +1426,11 @@ function drawAllThreeMiniCharts() {
             if (c.high > maxP) maxP = c.high;
         });
         botPositions.forEach(p => {
-            minP = Math.min(minP, p.entryPrice, p.tpPrice);
-            maxP = Math.max(maxP, p.entryPrice, p.tpPrice);
+            // Only expand chart bounds to position entry/TP if within 2% of live candle range!
+            if (Math.abs(p.entryPrice - livePrice) / Math.max(1e-9, livePrice) <= 0.02) {
+                minP = Math.min(minP, p.entryPrice, p.tpPrice);
+                maxP = Math.max(maxP, p.entryPrice, p.tpPrice);
+            }
         });
         const pad = Math.max((maxP - minP) * 0.18, livePrice * 0.0015);
         minP -= pad;
