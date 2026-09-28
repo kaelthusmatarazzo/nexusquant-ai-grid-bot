@@ -36,7 +36,7 @@ const PAIR_CONFIGS = {
 // Default Database Schema (Single Source of Truth — Unbiased Market Mechanics)
 const defaultDB = {
     meta: {
-        engine: 'NexusQuant GridDB v3.1 (24/7 Unbiased Real-Market Engine)',
+        engine: 'NexusQuant GridDB v6.1 (MEXC Positive Payoff Grid)',
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
         totalSavedTrades: 0,
@@ -80,7 +80,7 @@ const defaultDB = {
 function recomputeWalletFromTrades(dbData) {
     let wins = 0;
     let losses = 0;
-    const initCap = Number(dbData.wallet.initialCapital) || 100;
+    const initCap = Number(dbData.wallet.initialCapital) || 10;
     const withdrawn = Number(dbData.wallet.totalWithdrawn) || 0;
     let runningBalance = initCap;
 
@@ -100,7 +100,7 @@ function recomputeWalletFromTrades(dbData) {
     dbData.wallet.losses = losses;
     dbData.wallet.totalProfit = netProfit;
     dbData.wallet.walletBalance = Number((initCap + netProfit).toFixed(4));
-    dbData.wallet.vaultBalance = Number(Math.max(0, netProfit * 0.25).toFixed(4));
+    dbData.wallet.vaultBalance = Number(Math.max(0, netProfit * 0.30).toFixed(4));
     if (!dbData.wallet.botStartedAt) {
         const metaStart = dbData.meta && dbData.meta.createdAt ? new Date(dbData.meta.createdAt).getTime() : 0;
         dbData.wallet.botStartedAt = (metaStart > 0 ? metaStart : Date.now());
@@ -110,9 +110,8 @@ function recomputeWalletFromTrades(dbData) {
 
 // 100% Pure Real MEXC Futures Database Loader (Zero artificial history rewriting)
 function auditAndNormalizeDatabase(dbData) {
-    // One-time clean reset when upgrading to v6.1 (Positive Payoff MEXC Grid Engine: +$0.04 to +$0.07 Wins vs -$0.03 Max Stop)
     if (!dbData.meta || dbData.meta.engine !== 'NexusQuant GridDB v6.1 (MEXC Positive Payoff Grid)') {
-        const cleanCap = Number(dbData.wallet && dbData.wallet.initialCapital) || 10.00;
+        const cleanCap = 10.00;
         dbData.wallet = {
             initialCapital: cleanCap,
             walletBalance: cleanCap,
@@ -136,7 +135,6 @@ function auditAndNormalizeDatabase(dbData) {
             updatedAt: new Date().toISOString(),
             totalSavedTrades: 0
         };
-        saveDatabase(dbData);
         return dbData;
     }
     recomputeWalletFromTrades(dbData);
@@ -164,7 +162,6 @@ function loadDatabase() {
     } catch (e) {
         console.error('Error loading DB, initializing fresh:', e.message);
     }
-    saveDatabase(defaultDB);
     return JSON.parse(JSON.stringify(defaultDB));
 }
 
@@ -179,6 +176,7 @@ const GH_DB_BRANCH = 'db-backup';
 let lastCloudSyncAt = 0;
 let cloudSyncInFlight = false;
 let lastCloudSha = null;
+let cloudBootComplete = !GH_DB_TOKEN;
 
 function githubDbRequest(method, apiPath, bodyObj = null) {
     if (!GH_DB_TOKEN) return Promise.resolve(null);
@@ -215,7 +213,7 @@ function githubDbRequest(method, apiPath, bodyObj = null) {
 }
 
 async function syncDatabaseToCloudNow(force = false) {
-    if (!GH_DB_TOKEN || cloudSyncInFlight) return;
+    if (!GH_DB_TOKEN || !cloudBootComplete || cloudSyncInFlight) return;
     const now = Date.now();
     if (!force && now - lastCloudSyncAt < 25000) return;
     cloudSyncInFlight = true;
@@ -257,7 +255,10 @@ async function syncDatabaseToCloudNow(force = false) {
 }
 
 async function restoreDatabaseFromCloudOnBoot() {
-    if (!GH_DB_TOKEN) return;
+    if (!GH_DB_TOKEN) {
+        cloudBootComplete = true;
+        return;
+    }
     try {
         const res = await githubDbRequest('GET', `/repos/${GH_DB_OWNER}/${GH_DB_REPO}/contents/nexusquant_db.json?ref=${GH_DB_BRANCH}`);
         if (res && res.status === 200 && res.data && res.data.content) {
@@ -279,6 +280,8 @@ async function restoreDatabaseFromCloudOnBoot() {
         }
     } catch (e) {
         console.error('[CloudDB] Restore skipped:', e.message);
+    } finally {
+        cloudBootComplete = true;
     }
 }
 
@@ -506,7 +509,7 @@ function getDynamicGridParams(sym) {
         l1TpPct: Number((0.30 * volFactor).toFixed(3)),        // +0.28% to +0.35% TP on L1
         l2TpPct: Number((0.24 * volFactor).toFixed(3)),        // +0.22% to +0.28% TP after L2 Limit Maker merge
         l3TpPct: Number((0.20 * volFactor).toFixed(3)),
-        staggerStepPct: 0.11                                   // Fixed -0.11% L2 Limit Order so L1+L2 has 0.11% full breathing room before SL
+        staggerStepPct: 0.18                                   // -0.18% L2 Limit Order so 1m wicks don't trigger premature L2 merge
     };
 }
 
@@ -704,17 +707,16 @@ function serverOpenPositionForPair(sym, side, reason, gridLevel = 'L1', customTp
     const activeTradingBankroll = Math.max(initCap * 0.5, (Number(db.wallet.walletBalance) || initCap) - vaultReserve);
     const baseCapital = db.gridConfig.compoundEnabled !== false ? activeTradingBankroll : initCap;
 
-    // v8.1 Equalized DCA Sizing:
-    // L1 (FILLED) = 7% margin ($0.70 on $10 bankroll)
-    // L2 (PENDING_LIMIT 0% Maker Fee) = 5% margin ($0.50 on $10 bankroll -> L1+L2 combined = $1.20 margin, 42% entry shift!)
+    // v8.2 Wide-Channel DCA Sizing:
+    // L1 (FILLED) = 5% margin ($0.50 on $10 bankroll, slPct = 0.36% = -$0.027 max loss)
+    // L2 (PENDING_LIMIT 0% Maker Fee) = 4% margin ($0.40 on $10 bankroll -> L1+L2 combined = $0.90 margin, slPct = 0.22% = -$0.0297 max loss & -0.30% total channel!)
     const isL2Order = orderStatus === 'PENDING_LIMIT' || (gridLevel || '').startsWith('L2');
-    const orderSizePct = isL2Order ? 5 : 7;
+    const orderSizePct = isL2Order ? 4 : 5;
     const leverage = Math.max(15, Number(db.gridConfig.leverage) || 15);
-    const margin = Math.max(isL2Order ? 0.50 : 0.70, Number((baseCapital * (orderSizePct / 100)).toFixed(4)));
+    const margin = Math.max(isL2Order ? 0.40 : 0.50, Number((baseCapital * (orderSizePct / 100)).toFixed(4)));
 
     const tpPct = customTpPct || dyn.l1TpPct;
-    // Capped Stop Loss (0.19% on $1.00 x 15x = -$0.0285, strictly smaller than a single +$0.045 Win!)
-    const slPct = 0.19;
+    const slPct = 0.36;
 
     const tpPrice = side === 'LONG'
         ? entryPrice * (1 + tpPct / 100)
@@ -934,8 +936,9 @@ function sanitizeOpenPositionsV7() {
 
 sanitizeOpenPositionsV7();
 
-// Continuous 24/7 Multi-Bot Server Loop (v8.0 Institutional Master MEXC Engine)
+// Continuous 24/7 Multi-Bot Server Loop (v8.2 Wide-Channel Institutional MEXC Engine)
 setInterval(async () => {
+    if (!cloudBootComplete) return;
     await refreshServerMultiPairPrices();
     if (!db.gridConfig.botRunning) return;
 
@@ -973,9 +976,9 @@ setInterval(async () => {
                 primaryL1.margin = combinedMargin;
                 primaryL1.wasPendingLimit = true; // 0.00% Maker Fee on MEXC!
                 primaryL1.dcaCount = (primaryL1.dcaCount || 0) + 1;
-                primaryL1.tpPct = 0.24; // +0.24% on $1.20 margin x 15x ($18 notional) = +$0.0432 Win (0% Maker Fee)!
-                // Strictly cap L1+L2 Stop Loss at 0.165% from new average entry ($18 x -0.165% = -$0.0297 Max Loss, with 0.101% full breathing room after L2 fill!)
-                primaryL1.slPct = 0.165;
+                primaryL1.tpPct = 0.25; // +0.25% on $0.90 margin x 15x ($13.50 notional) = +$0.0338 Win (0% Maker Fee)!
+                // Strictly cap L1+L2 Stop Loss at 0.22% from new average entry ($13.50 x -0.22% = -$0.0297 Max Loss, with -0.30% total channel width!)
+                primaryL1.slPct = 0.22;
                 primaryL1.justMergedAt = Date.now();
                 primaryL1.tpPrice = primaryL1.side === 'LONG'
                     ? primaryL1.entryPrice * (1 + primaryL1.tpPct / 100)
@@ -1413,6 +1416,14 @@ const server = http.createServer(async (req, res) => {
 });
 
 server.listen(PORT, () => {
-    console.log(`NexusQuant 24/7 Master Server Engine (Unbiased v3.1) running at http://localhost:${PORT}`);
+    console.log(`NexusQuant 24/7 Master Server Engine (v8.2 Wide-Channel) running at http://localhost:${PORT}`);
     console.log(`Database file: ${DB_FILE}`);
+
+    // Render Free Tier 24/7 Self-Keep-Alive Ping every 4 minutes
+    const externalUrl = process.env.RENDER_EXTERNAL_URL || 'https://nexusquant-ai-grid-bot.onrender.com';
+    setInterval(() => {
+        try {
+            https.get(`${externalUrl}/api/db`, (res) => { res.resume(); }).on('error', () => {});
+        } catch (e) {}
+    }, 240000);
 });
