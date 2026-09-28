@@ -162,19 +162,135 @@ function loadDatabase() {
     return JSON.parse(JSON.stringify(defaultDB));
 }
 
-function saveDatabase(dbData) {
+// ============================================================================
+// RENDER CLOUD PERSISTENT DATABASE SYNC (via GitHub 'db-backup' branch)
+// Prevents Render Free Tier container restarts from ever losing wallet/trades!
+// ============================================================================
+const GH_DB_TOKEN = process.env.GITHUB_DB_TOKEN || '';
+const GH_DB_OWNER = process.env.GITHUB_DB_OWNER || 'kaelthusmatarazzo';
+const GH_DB_REPO = process.env.GITHUB_DB_REPO || 'nexusquant-ai-grid-bot';
+const GH_DB_BRANCH = 'db-backup';
+let lastCloudSyncAt = 0;
+let cloudSyncInFlight = false;
+let lastCloudSha = null;
+
+function githubDbRequest(method, apiPath, bodyObj = null) {
+    if (!GH_DB_TOKEN) return Promise.resolve(null);
+    return new Promise((resolve) => {
+        const payload = bodyObj ? JSON.stringify(bodyObj) : null;
+        const req = https.request({
+            hostname: 'api.github.com',
+            path: apiPath,
+            method,
+            headers: {
+                'User-Agent': 'NexusQuant-CloudDB-Sync',
+                'Authorization': `Bearer ${GH_DB_TOKEN}`,
+                'Accept': 'application/vnd.github+json',
+                'Content-Type': 'application/json',
+                ...(payload ? { 'Content-Length': Buffer.byteLength(payload) } : {})
+            },
+            timeout: 6000
+        }, (res) => {
+            let raw = '';
+            res.on('data', c => { raw += c; });
+            res.on('end', () => {
+                try {
+                    resolve({ status: res.statusCode, data: raw ? JSON.parse(raw) : {} });
+                } catch (e) {
+                    resolve({ status: res.statusCode, data: null });
+                }
+            });
+        });
+        req.on('error', () => resolve(null));
+        req.on('timeout', () => { req.destroy(); resolve(null); });
+        if (payload) req.write(payload);
+        req.end();
+    });
+}
+
+async function syncDatabaseToCloudNow(force = false) {
+    if (!GH_DB_TOKEN || cloudSyncInFlight) return;
+    const now = Date.now();
+    if (!force && now - lastCloudSyncAt < 25000) return;
+    cloudSyncInFlight = true;
+    lastCloudSyncAt = now;
+    try {
+        const branchCheck = await githubDbRequest('GET', `/repos/${GH_DB_OWNER}/${GH_DB_REPO}/git/ref/heads/${GH_DB_BRANCH}`);
+        if (!branchCheck || branchCheck.status === 404) {
+            const mainRef = await githubDbRequest('GET', `/repos/${GH_DB_OWNER}/${GH_DB_REPO}/git/ref/heads/main`);
+            if (mainRef && mainRef.status === 200 && mainRef.data && mainRef.data.object) {
+                await githubDbRequest('POST', `/repos/${GH_DB_OWNER}/${GH_DB_REPO}/git/refs`, {
+                    ref: `refs/heads/${GH_DB_BRANCH}`,
+                    sha: mainRef.data.object.sha
+                });
+            }
+        }
+        if (!lastCloudSha) {
+            const existing = await githubDbRequest('GET', `/repos/${GH_DB_OWNER}/${GH_DB_REPO}/contents/nexusquant_db.json?ref=${GH_DB_BRANCH}`);
+            if (existing && existing.status === 200 && existing.data && existing.data.sha) {
+                lastCloudSha = existing.data.sha;
+            }
+        }
+        const contentB64 = Buffer.from(JSON.stringify(db, null, 2), 'utf-8').toString('base64');
+        const putRes = await githubDbRequest('PUT', `/repos/${GH_DB_OWNER}/${GH_DB_REPO}/contents/nexusquant_db.json`, {
+            message: `Auto-sync NexusQuant Cloud DB ($${(db.wallet && db.wallet.walletBalance || 10).toFixed(2)})`,
+            content: contentB64,
+            branch: GH_DB_BRANCH,
+            ...(lastCloudSha ? { sha: lastCloudSha } : {})
+        });
+        if (putRes && (putRes.status === 200 || putRes.status === 201) && putRes.data && putRes.data.content) {
+            lastCloudSha = putRes.data.content.sha;
+        } else if (putRes && putRes.status === 409) {
+            lastCloudSha = null;
+        }
+    } catch (e) {
+        // Ignore transient sync errors
+    } finally {
+        cloudSyncInFlight = false;
+    }
+}
+
+async function restoreDatabaseFromCloudOnBoot() {
+    if (!GH_DB_TOKEN) return;
+    try {
+        const res = await githubDbRequest('GET', `/repos/${GH_DB_OWNER}/${GH_DB_REPO}/contents/nexusquant_db.json?ref=${GH_DB_BRANCH}`);
+        if (res && res.status === 200 && res.data && res.data.content) {
+            lastCloudSha = res.data.sha;
+            const decoded = Buffer.from(res.data.content, 'base64').toString('utf-8');
+            const parsed = JSON.parse(decoded);
+            if (parsed && parsed.wallet) {
+                db = auditAndNormalizeDatabase({
+                    ...defaultDB,
+                    ...parsed,
+                    meta: { ...defaultDB.meta, ...(parsed.meta || {}) },
+                    wallet: { ...defaultDB.wallet, ...(parsed.wallet || {}) },
+                    gridConfig: { ...defaultDB.gridConfig, ...(parsed.gridConfig || {}) },
+                    liveState: { ...defaultDB.liveState, ...(parsed.liveState || {}) }
+                });
+                fs.writeFileSync(DB_FILE, JSON.stringify(db, null, 2), 'utf-8');
+                console.log(`[CloudDB] Restored persistent database from GitHub (${GH_DB_BRANCH})! Wallet: $${db.wallet.walletBalance}`);
+            }
+        }
+    } catch (e) {
+        console.error('[CloudDB] Restore skipped:', e.message);
+    }
+}
+
+function saveDatabase(dbData, forceCloud = false) {
     try {
         dbData.meta.updatedAt = new Date().toISOString();
         dbData.meta.totalSavedTrades = dbData.trades.length;
         const tmpFile = DB_FILE + '.tmp';
         fs.writeFileSync(tmpFile, JSON.stringify(dbData, null, 2), 'utf-8');
         fs.renameSync(tmpFile, DB_FILE);
+        syncDatabaseToCloudNow(forceCloud);
     } catch (e) {
         console.error('Error writing DB:', e.message);
     }
 }
 
 let db = loadDatabase();
+restoreDatabaseFromCloudOnBoot();
 
 const MIME_TYPES = {
     '.html': 'text/html; charset=utf-8',
@@ -211,22 +327,17 @@ function parseBody(req) {
 
 // ============================================================================
 // 24/7 MULTI-PAIR TOP-3 PORTFOLIO GRID ENGINE (100% PURE REAL BINANCE FEED)
-// Operates simultaneously on the #1, #2, and #3 Best Grid Pairs sharing 1 Bankroll!
+// Uses data-api.binance.vision first so US Cloud Servers (Render Oregon) never get HTTP 451!
 // ============================================================================
-
-function fetchAllBinance24hrTickers() {
+function fetchJsonFromUrl(url) {
     return new Promise((resolve) => {
-        const symbols = Object.keys(PAIR_CONFIGS);
-        const query = encodeURIComponent(JSON.stringify(symbols));
-        const url = `https://api.binance.com/api/v3/ticker/24hr?symbols=${query}`;
         const req = https.get(url, { timeout: 4500 }, (resp) => {
             let data = '';
             resp.on('data', chunk => { data += chunk; });
             resp.on('end', () => {
                 try {
-                    const list = JSON.parse(data);
-                    if (Array.isArray(list) && list.length > 0) {
-                        resolve(list);
+                    if (resp.statusCode === 200) {
+                        resolve(JSON.parse(data));
                         return;
                     }
                     resolve(null);
@@ -238,6 +349,23 @@ function fetchAllBinance24hrTickers() {
         req.on('error', () => resolve(null));
         req.on('timeout', () => { req.destroy(); resolve(null); });
     });
+}
+
+async function fetchAllBinance24hrTickers() {
+    const symbols = Object.keys(PAIR_CONFIGS);
+    const query = encodeURIComponent(JSON.stringify(symbols));
+    // 1. Primary: Official Binance Vision CloudFront Mirror (Works 100% on Render US Oregon without HTTP 451!)
+    const visionList = await fetchJsonFromUrl(`https://data-api.binance.vision/api/v3/ticker/24hr?symbols=${query}`);
+    if (Array.isArray(visionList) && visionList.length > 0) return visionList;
+    // 2. Secondary: Standard Binance API
+    const stdList = await fetchJsonFromUrl(`https://api.binance.com/api/v3/ticker/24hr?symbols=${query}`);
+    if (Array.isArray(stdList) && stdList.length > 0) return stdList;
+    // 3. Fallback: Official MEXC Global 24hr API
+    const mexcList = await fetchJsonFromUrl('https://api.mexc.com/api/v3/ticker/24hr');
+    if (Array.isArray(mexcList) && mexcList.length > 0) {
+        return mexcList.filter(item => PAIR_CONFIGS[item.symbol]);
+    }
+    return null;
 }
 
 async function refreshServerMultiPairPrices() {
