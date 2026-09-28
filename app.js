@@ -1255,7 +1255,10 @@ async function fetchTriChartsKlines(force = false) {
     const top3 = getTop3ScannerPairs();
     await Promise.all(top3.map(async (sym) => {
         try {
-            const res = await fetch(`https://api.binance.com/api/v3/klines?symbol=${sym}&interval=1m&limit=28`);
+            let res = await fetch(`https://data-api.binance.vision/api/v3/klines?symbol=${sym}&interval=1m&limit=28`);
+            if (!res.ok) {
+                res = await fetch(`https://api.binance.com/api/v3/klines?symbol=${sym}&interval=1m&limit=28`);
+            }
             if (res.ok) {
                 const klines = await res.json();
                 if (Array.isArray(klines) && klines.length > 0) {
@@ -1557,7 +1560,6 @@ async function syncWalletToDatabase(extraPayload = {}) {
 }
 
 async function loadStateFromDatabase() {
-    loadStateFromStorage();
     try {
         const res = await fetch('/api/db');
         if (res.ok) {
@@ -1592,12 +1594,13 @@ async function loadStateFromDatabase() {
                 // 2. Extract Wallet KPIs & Daily Goal Telemetry
                 const w = data.db.wallet || {};
                 if (typeof w.walletBalance === 'number') {
-                    state.initialCapital = w.initialCapital || 1000;
+                    state.initialCapital = w.initialCapital || 10;
                     state.walletBalance = w.walletBalance;
                     state.totalProfit = w.totalProfit || 0;
                     state.vaultBalance = typeof w.vaultBalance === 'number' ? w.vaultBalance : Math.max(0, state.totalProfit * 0.25);
                     state.wins = w.wins || 0;
                     state.losses = w.losses || 0;
+                    saveStateToStorage();
 
                     const dailyEl = document.getElementById('dailyGoalStatusVal');
                     if (dailyEl) {
@@ -1981,6 +1984,30 @@ function initEvents() {
         } catch (e) {}
         addTerminalLog(state.botRunning ? 'Servidor 24/7 reativado em todas as abas.' : 'Servidor 24/7 pausado temporariamente.', 'info');
     });
+
+    // 1-Click Institutional Kill Switch (Panic Close All & Pause)
+    const panicBtn = document.getElementById('panicCloseBtn');
+    if (panicBtn) {
+        panicBtn.addEventListener('click', async () => {
+            try {
+                const res = await fetch('/api/panic-close', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' }
+                });
+                const data = await res.json();
+                state.botRunning = false;
+                if (powerBtn) {
+                    powerBtn.className = 'btn-bot-power paused';
+                    document.getElementById('botPowerText').textContent = 'ROBÔ PAUSADO';
+                    document.getElementById('botStateLabel').textContent = 'EM ESPERA';
+                }
+                await loadStateFromDatabase();
+                addTerminalLog(`🚨 [KILL-SWITCH] ${data && data.closedCount ? data.closedCount : 0} posições fechadas a mercado e robô pausado com segurança!`, 'info');
+            } catch (e) {
+                addTerminalLog('❌ Erro ao acionar Kill-Switch no servidor.', 'info');
+            }
+        });
+    }
 
     // Grid Levels Count Selector
     const gridLevelsSelect = document.getElementById('gridLevelsSelect');
