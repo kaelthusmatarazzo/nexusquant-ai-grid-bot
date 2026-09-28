@@ -27,8 +27,8 @@ const state = {
     speedMultiplier: 1, // Locked 100% Real-Time (1:1)
     soundEnabled: true,
     compoundEnabled: true,
-    initialCapital: 1000.00,
-    walletBalance: 1000.00,
+    initialCapital: 10.00,
+    walletBalance: 10.00,
     totalProfit: 0.00,
     totalWithdrawn: 0.00,
     orderSizePct: 15,
