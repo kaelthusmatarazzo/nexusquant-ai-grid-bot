@@ -1933,36 +1933,58 @@ function initEvents() {
     const apiBtn = document.getElementById('btnApiConnect');
     if (apiBtn) {
         apiBtn.addEventListener('click', () => {
-            openModal('🔗 Ponte API Institucional & Proteção Comercial (SaaS)', `
-                <p class="muted-small">Arquitetura Non-Custodial: O capital fica 100% na conta da corretora do cliente (Permissão API apenas para Trade, <strong>Sem Permissão de Saque</strong>).</p>
+            openModal('🔗 Conectar Conta Real MEXC (Futures & Spot 0% Maker)', `
+                <p class="muted-small">Arquitetura Non-Custodial: O capital fica 100% na sua conta da MEXC. Crie sua chave em <strong>MEXC ➔ Gerenciamento de API</strong> marcando <strong>Negociação (Spot / Futuros)</strong> e <strong>SEM Permissão de Saque</strong>.</p>
                 <div class="control-group" style="margin-top:8px;">
-                    <label>Modo de Operação / Corretora Alvo</label>
-                    <select id="exchangeModeSelect" class="num-input mono">
-                        <option value="PAPER_BINANCE" selected>🟢 Paper Trading Tempo Real (Feed Binance 1m • 0% Maker)</option>
-                        <option value="MEXC_LIVE">🔥 MEXC Futuros Perpétuos (API Real • 0.00% Taxa Maker)</option>
-                        <option value="BINANCE_USDC">🟡 Binance Futures USDC-M (API Real • 0.00% Promo Maker)</option>
-                    </select>
+                    <label>MEXC Access Key (API Key)</label>
+                    <input type="text" id="modalMexcApiKey" placeholder="Ex: mx0vgl..." class="num-input mono">
+                </div>
+                <div class="control-group" style="margin-top:8px;">
+                    <label>MEXC Secret Key (HMAC-SHA256)</label>
+                    <input type="password" id="modalMexcSecretKey" placeholder="Cole sua Secret Key da MEXC..." class="num-input mono">
                 </div>
                 <div class="control-row-2" style="margin-top:8px;">
                     <div class="control-group">
-                        <label>🛡️ Disjuntor Diário (Max DD)</label>
-                        <input type="text" value="-3.50% (Pausa Auto)" readonly class="num-input mono positive">
+                        <label>🛡️ Stop Curto por Ordem</label>
+                        <input type="text" value="-$0.029 Máx" readonly class="num-input mono positive">
                     </div>
                     <div class="control-group">
                         <label>🏦 Reserva Cofre Blindado</label>
-                        <input type="text" value="25% de cada TP" readonly class="num-input mono cyan-text">
+                        <input type="text" value="30% do Lucro" readonly class="num-input mono cyan-text">
                     </div>
                 </div>
-                <div class="control-group" style="margin-top:8px;">
-                    <label>API Key da Corretora (Opcional p/ Execução Real)</label>
-                    <input type="password" id="apiKeyInput" placeholder="Cole sua API Key Read+Trade (Sem permissão de saque)..." class="num-input mono">
-                </div>
-                <button id="saveApiConfigBtn" class="modal-btn" style="margin-top:10px;">Ativar Roteamento & Disjuntor Institucional</button>
+                <div id="modalMexcStatus" class="mono cyan-text" style="font-size:12px; margin-top:8px; text-align:center;">Aguardando chaves para autenticação HMAC-SHA256...</div>
+                <button id="saveApiConfigBtn" class="modal-btn" style="margin-top:10px;">⚡ Autenticar Conta MEXC & Ativar Trade Real</button>
             `);
-            document.getElementById('saveApiConfigBtn').onclick = () => {
-                const modeSel = document.getElementById('exchangeModeSelect').value;
-                addTerminalLog(`🏛️ [SAAS BRIDGE] Roteamento configurado (${modeSel}) com Disjuntor de Drawdown Diário (-3.5%) e Cofre Blindado (25%) ativos.`, 'profit');
-                closeModal();
+            document.getElementById('saveApiConfigBtn').onclick = async () => {
+                const mexcApiKey = (document.getElementById('modalMexcApiKey').value || '').trim();
+                const mexcSecretKey = (document.getElementById('modalMexcSecretKey').value || '').trim();
+                const stEl = document.getElementById('modalMexcStatus');
+                if (!mexcApiKey || !mexcSecretKey) {
+                    if (stEl) stEl.textContent = '⚠️ Cole sua Access Key e Secret Key da MEXC.';
+                    return;
+                }
+                if (stEl) stEl.textContent = '⏳ Autenticando HMAC-SHA256 na MEXC (Futures + Spot)...';
+                try {
+                    const res = await fetch('/api/action', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ action: 'TEST_MEXC_API', mexcApiKey, mexcSecretKey })
+                    });
+                    const data = await res.json();
+                    if (data && data.mexcCheck && data.mexcCheck.connected) {
+                        const bal = Number(data.mexcCheck.balanceUSDT || 0).toFixed(2);
+                        if (stEl) stEl.textContent = `✅ CONECTADO (${data.mexcCheck.accountType})! Saldo Real Sincronizado: $${bal} USDT`;
+                        addTerminalLog(`🔑 [MEXC CONTA REAL ATIVA] Conectado via ${data.mexcCheck.accountType}! Saldo Real: $${bal} USDT sincronizado para execução automática.`, 'profit');
+                        await loadStateFromDatabase();
+                        setTimeout(closeModal, 1500);
+                    } else {
+                        const err = (data && data.mexcCheck && data.mexcCheck.error) || 'Verifique a Access Key e Secret Key';
+                        if (stEl) stEl.textContent = `❌ Erro MEXC: ${err}`;
+                    }
+                } catch (e) {
+                    if (stEl) stEl.textContent = '❌ Erro de comunicação com o servidor.';
+                }
             };
         });
     }

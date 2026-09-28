@@ -750,6 +750,17 @@ function serverOpenPositionForPair(sym, side, reason, gridLevel = 'L1', customTp
     };
 
     db.openPositions.push(pos);
+    if (db.gridConfig && db.gridConfig.mexcConnected) {
+        dispatchRealMexcOrder({
+            sym,
+            side,
+            isClose: false,
+            marginUSD: margin,
+            leverage,
+            price: entryPrice,
+            isLimit: orderStatus === 'PENDING_LIMIT'
+        }).catch(() => {});
+    }
     db.liveState.lastEvent = {
         id: pos.id + '-OPEN',
         type: 'entry',
@@ -764,6 +775,17 @@ function serverOpenPositionForPair(sym, side, reason, gridLevel = 'L1', customTp
 }
 
 function serverClosePosition(pos, exitPrice, pnlUSD, closeReason) {
+    if (db.gridConfig && db.gridConfig.mexcConnected && pos.orderStatus === 'FILLED') {
+        dispatchRealMexcOrder({
+            sym: pos.symbol || 'SOLUSDT',
+            side: pos.side,
+            isClose: true,
+            marginUSD: pos.margin || 1.0,
+            leverage: pos.leverage || 15,
+            price: exitPrice,
+            isLimit: false
+        }).catch(() => {});
+    }
     // 100% Exact MEXC Futures Fee Accounting:
     const isPureMakerLimit = (pos.gridLevel || '').startsWith('L2') || pos.wasPendingLimit === true;
     let feeRatePct = isPureMakerLimit ? 0.00 : 0.01;
@@ -1150,9 +1172,52 @@ setInterval(async () => {
 refreshServerMultiPairPrices();
 
 // ============================================================================
-// OFFICIAL MEXC API AUTHENTICATION TESTER (HMAC-SHA256)
+// OFFICIAL MEXC API AUTHENTICATION & LIVE ORDER EXECUTION BRIDGE (HMAC-SHA256)
+// Supports both MEXC Perpetual Futures (contract.mexc.com) & MEXC Spot (api.mexc.com)
 // ============================================================================
 const crypto = require('crypto');
+
+function verifyMexcSpotAccount(apiKey, secretKey) {
+    return new Promise((resolve) => {
+        try {
+            const timestamp = Date.now();
+            const query = `timestamp=${timestamp}`;
+            const signature = crypto.createHmac('sha256', secretKey).update(query).digest('hex');
+            const req = https.request({
+                hostname: 'api.mexc.com',
+                path: `/api/v3/account?${query}&signature=${signature}`,
+                method: 'GET',
+                headers: {
+                    'X-MEXC-APIKEY': apiKey,
+                    'Content-Type': 'application/json'
+                },
+                timeout: 5000
+            }, (res) => {
+                let raw = '';
+                res.on('data', chunk => { raw += chunk; });
+                res.on('end', () => {
+                    try {
+                        const parsed = JSON.parse(raw);
+                        if (parsed && Array.isArray(parsed.balances)) {
+                            const usdt = parsed.balances.find(b => b.asset === 'USDT');
+                            const free = usdt ? Number(usdt.free || 0) + Number(usdt.locked || 0) : 0;
+                            resolve({ connected: true, accountType: 'SPOT', balanceUSDT: Number(free.toFixed(4)) });
+                        } else {
+                            resolve({ connected: false, error: (parsed && parsed.msg) || 'Chave Spot inválida' });
+                        }
+                    } catch (e) {
+                        resolve({ connected: false, error: 'Erro ao ler resposta Spot MEXC' });
+                    }
+                });
+            });
+            req.on('error', (err) => resolve({ connected: false, error: err.message }));
+            req.on('timeout', () => { req.destroy(); resolve({ connected: false, error: 'Timeout MEXC Spot' }); });
+            req.end();
+        } catch (e) {
+            resolve({ connected: false, error: e.message });
+        }
+    });
+}
 
 function verifyMexcApiConnection(apiKey, secretKey) {
     if (!apiKey || !secretKey) return Promise.resolve({ connected: false, error: 'Chaves vazias' });
@@ -1173,31 +1238,138 @@ function verifyMexcApiConnection(apiKey, secretKey) {
                     'Content-Type': 'application/json'
                 },
                 timeout: 5000
-            }, (res) => {
+            }, async (res) => {
                 let raw = '';
                 res.on('data', chunk => { raw += chunk; });
-                res.on('end', () => {
+                res.on('end', async () => {
                     try {
                         const parsed = JSON.parse(raw);
+                        const spotCheck = await verifyMexcSpotAccount(apiKey, secretKey);
                         if (parsed && parsed.success === true) {
                             const usdtAsset = Array.isArray(parsed.data)
                                 ? parsed.data.find(a => a.currency === 'USDT')
                                 : null;
-                            const balance = usdtAsset ? Number(usdtAsset.availableBalance || usdtAsset.equity || 0) : 0;
-                            resolve({ connected: true, balanceUSDT: balance, raw: parsed });
+                            const futBal = usdtAsset ? Number(usdtAsset.availableBalance || usdtAsset.equity || 0) : 0;
+                            const spotBal = (spotCheck && spotCheck.connected) ? Number(spotCheck.balanceUSDT || 0) : 0;
+                            const bestBal = futBal > 0 ? futBal : spotBal;
+                            const mode = futBal > 0 ? 'FUTURES_PERPETUAL' : (spotBal > 0 ? 'SPOT_ZERO_FEE' : 'FUTURES_PERPETUAL');
+                            resolve({ connected: true, accountType: mode, balanceUSDT: Number(bestBal.toFixed(4)), futuresUSDT: futBal, spotUSDT: spotBal });
+                        } else if (spotCheck && spotCheck.connected) {
+                            resolve({ connected: true, accountType: 'SPOT_ZERO_FEE', balanceUSDT: spotCheck.balanceUSDT, futuresUSDT: 0, spotUSDT: spotCheck.balanceUSDT });
                         } else {
-                            resolve({ connected: false, error: (parsed && parsed.message) || 'Assinatura ou permissão Futures inválida' });
+                            resolve({ connected: false, error: (parsed && parsed.message) || (spotCheck && spotCheck.error) || 'Assinatura API inválida na MEXC' });
                         }
                     } catch (e) {
-                        resolve({ connected: false, error: 'Resposta inválida da MEXC' });
+                        const spotCheck = await verifyMexcSpotAccount(apiKey, secretKey);
+                        if (spotCheck && spotCheck.connected) {
+                            resolve(spotCheck);
+                        } else {
+                            resolve({ connected: false, error: 'Resposta inválida da MEXC' });
+                        }
                     }
                 });
             });
-            req.on('error', (err) => resolve({ connected: false, error: err.message }));
-            req.on('timeout', () => { req.destroy(); resolve({ connected: false, error: 'Timeout MEXC API' }); });
+            req.on('error', async () => {
+                const spotCheck = await verifyMexcSpotAccount(apiKey, secretKey);
+                resolve(spotCheck);
+            });
+            req.on('timeout', async () => {
+                req.destroy();
+                const spotCheck = await verifyMexcSpotAccount(apiKey, secretKey);
+                resolve(spotCheck);
+            });
             req.end();
         } catch (e) {
             resolve({ connected: false, error: e.message });
+        }
+    });
+}
+
+// Live Order Dispatcher to MEXC (Futures contract.mexc.com + Automatic Spot api.mexc.com Fallback)
+function dispatchRealMexcOrder({ sym, side, isClose = false, marginUSD = 1.0, leverage = 15, price = 0, isLimit = false }) {
+    if (!db.gridConfig || !db.gridConfig.mexcConnected || !db.gridConfig.mexcApiKey || !db.gridConfig.mexcSecretKey) {
+        return Promise.resolve({ executed: false, mode: 'SIMULATION' });
+    }
+    const apiKey = db.gridConfig.mexcApiKey;
+    const secretKey = db.gridConfig.mexcSecretKey;
+    const mexcContractSym = sym.replace('USDT', '_USDT');
+    // MEXC Futures side: 1=open long, 2=close short, 3=open short, 4=close long
+    const futSide = !isClose
+        ? (side === 'LONG' ? 1 : 3)
+        : (side === 'LONG' ? 4 : 2);
+    const futType = isLimit ? 1 : 5; // 1=Limit Maker, 5=Market
+    const vol = Math.max(1, Math.round((marginUSD * leverage) / Math.max(0.0001, price)));
+
+    return new Promise((resolve) => {
+        try {
+            const reqTime = Date.now().toString();
+            const bodyObj = {
+                symbol: mexcContractSym,
+                price: Number(price.toFixed(6)),
+                vol,
+                leverage,
+                side: futSide,
+                type: futType,
+                openType: 1 // Isolated margin
+            };
+            const bodyStr = JSON.stringify(bodyObj);
+            const signPayload = apiKey + reqTime + bodyStr;
+            const signature = crypto.createHmac('sha256', secretKey).update(signPayload).digest('hex');
+
+            const req = https.request({
+                hostname: 'contract.mexc.com',
+                path: '/api/v1/private/order/submit',
+                method: 'POST',
+                headers: {
+                    'ApiKey': apiKey,
+                    'Request-Time': reqTime,
+                    'Signature': signature,
+                    'Content-Type': 'application/json',
+                    'Content-Length': Buffer.byteLength(bodyStr)
+                },
+                timeout: 4500
+            }, (res) => {
+                let raw = '';
+                res.on('data', c => { raw += c; });
+                res.on('end', () => {
+                    try {
+                        const parsed = JSON.parse(raw);
+                        if (parsed && parsed.success === true) {
+                            return resolve({ executed: true, venue: 'MEXC_FUTURES', orderId: parsed.data });
+                        }
+                    } catch (e) {}
+                    // Automatic Fallback to MEXC Spot API (api.mexc.com/api/v3/order) if Futures endpoint returns retail 1002
+                    const spotSide = (!isClose ? (side === 'LONG' ? 'BUY' : 'SELL') : (side === 'LONG' ? 'SELL' : 'BUY'));
+                    const ts = Date.now();
+                    const q = `symbol=${sym}&side=${spotSide}&type=MARKET&quoteOrderQty=${Math.max(1, marginUSD).toFixed(2)}&timestamp=${ts}`;
+                    const sigSpot = crypto.createHmac('sha256', secretKey).update(q).digest('hex');
+                    const sReq = https.request({
+                        hostname: 'api.mexc.com',
+                        path: `/api/v3/order?${q}&signature=${sigSpot}`,
+                        method: 'POST',
+                        headers: { 'X-MEXC-APIKEY': apiKey, 'Content-Type': 'application/json' },
+                        timeout: 4500
+                    }, (sRes) => {
+                        let sRaw = '';
+                        sRes.on('data', d => { sRaw += d; });
+                        sRes.on('end', () => {
+                            try {
+                                const sParsed = JSON.parse(sRaw);
+                                resolve({ executed: Boolean(sParsed && sParsed.orderId), venue: 'MEXC_SPOT', orderId: sParsed && sParsed.orderId });
+                            } catch (e) {
+                                resolve({ executed: false });
+                            }
+                        });
+                    });
+                    sReq.on('error', () => resolve({ executed: false }));
+                    sReq.end();
+                });
+            });
+            req.on('error', () => resolve({ executed: false }));
+            req.write(bodyStr);
+            req.end();
+        } catch (e) {
+            resolve({ executed: false });
         }
     });
 }
@@ -1280,7 +1452,14 @@ const server = http.createServer(async (req, res) => {
             db.gridConfig.mexcSecretKey = mexcSecretKey;
             const check = await verifyMexcApiConnection(mexcApiKey, mexcSecretKey);
             db.gridConfig.mexcConnected = Boolean(check.connected);
-            saveDatabase(db);
+            db.gridConfig.mexcAccountType = check.accountType || 'FUTURES_PERPETUAL';
+            // If connected and user has real USDT balance on MEXC (> $1), automatically sync bankroll to their real MEXC balance!
+            if (check.connected && Number(check.balanceUSDT) >= 1) {
+                const realCap = Number(Number(check.balanceUSDT).toFixed(2));
+                db.wallet.initialCapital = realCap;
+                db.wallet.walletBalance = Number((realCap + (db.wallet.totalProfit || 0)).toFixed(4));
+            }
+            saveDatabase(db, true);
             return sendJSON(res, 200, { ok: true, mexcCheck: check, db });
         }
         if (body.action === 'TEST_TELEGRAM') {
