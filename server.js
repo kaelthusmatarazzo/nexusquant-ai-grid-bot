@@ -833,13 +833,22 @@ function liquidateAllForPairSwitch(newSymbol) {
     saveDatabase(db);
 }
 
-// Sanitize legacy L3 or conflicting LONG/SHORT orders on the same coin so v7.0 runs 100% clean
+// Sanitize legacy L3, price outliers (>3% from live feed), or conflicting LONG/SHORT orders
 function sanitizeOpenPositionsV7() {
     if (!Array.isArray(db.openPositions)) return;
+    const livePrices = (db.liveState && db.liveState.prices) || {};
     for (let i = db.openPositions.length - 1; i >= 0; i--) {
         const p = db.openPositions[i];
+        const sym = p.symbol || 'SOLUSDT';
+        const realP = livePrices[sym];
         if ((p.gridLevel || '').startsWith('L3')) {
             db.openPositions.splice(i, 1);
+            continue;
+        }
+        // Purge any ghost order opened at a fallback price before live feed connected (>3% deviation)
+        if (realP > 0 && Math.abs(p.entryPrice - realP) / realP > 0.03) {
+            db.openPositions.splice(i, 1);
+            continue;
         }
     }
     const bySym = {};
