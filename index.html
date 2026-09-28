@@ -1,0 +1,539 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="theme-color" content="#040811">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="NexusQuant AI">
+    <link rel="manifest" href="/manifest.json">
+    <title>NexusQuant AI — 3x Multi-Grid Bot 100% Real Binance</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <!-- Top Navigation & Status Bar -->
+    <header class="topbar">
+        <div class="brand">
+            <div class="brand-logo">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+                    <path d="M12 2L2 7L12 12L22 7L12 2Z" stroke="#00F5A0" stroke-width="2" stroke-linejoin="round"/>
+                    <path d="M2 17L12 22L22 17" stroke="#00D9F5" stroke-width="2" stroke-linejoin="round"/>
+                    <path d="M2 12L12 17L22 12" stroke="#00F5A0" stroke-width="2" stroke-linejoin="round"/>
+                </svg>
+                <span class="pulse-dot"></span>
+            </div>
+            <div>
+                <div class="brand-title">NEXUS<span>QUANT</span> <span class="badge-pro">AI v4.2</span></div>
+                <div class="brand-subtitle">Motor Algorítmico de Alta Frequência & Renda Passiva</div>
+            </div>
+        </div>
+
+        <!-- Pair Selector & Live Market Feed Status -->
+        <div class="market-strip">
+            <div class="pair-selector-wrap">
+                <label for="pairSelect">PAR ATIVO (14 PARES ESCANEADOS POR IA)</label>
+                <div class="pair-select-row">
+                    <select id="pairSelect" class="pair-select">
+                        <option value="SOLUSDT" selected>SOL / USDT (Líder Volatilidade + Liquidez 🔥)</option>
+                        <option value="SUIUSDT">SUI / USDT (Explosivo p/ Grid 🔥)</option>
+                        <option value="WIFUSDT">WIF / USDT (Altíssima Volatilidade HFT 🚀)</option>
+                        <option value="FETUSDT">FET / USDT (Setor IA • Super Oscilação 🔥)</option>
+                        <option value="DOGEUSDT">DOGE / USDT (Alta Frequência de Pavios ⚡)</option>
+                        <option value="AVAXUSDT">AVAX / USDT (Amplitude Forte de Canal 🔥)</option>
+                        <option value="INJUSDT">INJ / USDT (Volatilidade DeFi Intensa ⚡)</option>
+                        <option value="NEARUSDT">NEAR / USDT (Reversão à Média Rápida ⚡)</option>
+                        <option value="RENDERUSDT">RENDER / USDT (Oscilação de Alta Densidade 🔥)</option>
+                        <option value="SEIUSDT">SEI / USDT (Micro-Spread Veloz ⚡)</option>
+                        <option value="XRPUSDT">XRP / USDT (Liquidez + Canal Lateral ⚡)</option>
+                        <option value="ETHUSDT">ETH / USDT (Moderado Institucional)</option>
+                        <option value="BNBUSDT">BNB / USDT (Estável / Baixo Risco)</option>
+                        <option value="BTCUSDT">BTC / USDT (Âncora Institucional)</option>
+                    </select>
+                    <button id="autoPairBtn" class="btn-autopair active" title="A IA escaneia os 14 pares na Binance e escolhe sozinha o #1 em Volatilidade de Serrote p/ Grid">
+                        🧠 Auto-Par IA: ON
+                    </button>
+                </div>
+            </div>
+
+            <div class="ticker-metric">
+                <span class="metric-label">PREÇO ATUAL</span>
+                <span id="livePrice" class="metric-value mono">$174.50</span>
+            </div>
+
+            <div class="ticker-metric">
+                <span class="metric-label">VOLATILIDADE GRID (ATR + SERROTE)</span>
+                <span id="pairVolatilityBadge" class="metric-value mono positive">ALTA (0.07%/tick) 🔥</span>
+            </div>
+
+            <div class="ticker-metric">
+                <span class="metric-label">SCORE DO PAR</span>
+                <span id="currentPairScore" class="feed-badge online">
+                    <span class="status-dot"></span> 98.4 / 100 (IDEAL)
+                </span>
+            </div>
+        </div>
+
+        <!-- Global Controls (100% Real-Time Only) -->
+        <div class="header-actions">
+            <div class="ticker-metric">
+                <span class="metric-label">SINCRONIA DE TEMPO</span>
+                <span class="feed-badge online mono" title="Operando exclusivamente em Tempo Real (1:1) com as velas de 1 minuto da Binance">
+                    <span class="status-dot"></span> TEMPO REAL 1m (1:1)
+                </span>
+            </div>
+
+            <button id="btnApiConnect" class="icon-btn" title="Conectar API Key (MEXC / Binance) e Proteção Institucional SaaS">
+                🔗 API Corretora / SaaS
+            </button>
+
+            <button id="soundToggle" class="icon-btn" title="Ativar/Desativar Som de Lucro">
+                🔊 Som ON
+            </button>
+
+            <button id="toggleBotBtn" class="btn-bot-power running">
+                <span class="power-icon">⚡</span>
+                <span id="botPowerText">ROBÔ OPERANDO</span>
+            </button>
+        </div>
+    </header>
+
+    <!-- Live AI Grid Scanner Radar Strip -->
+    <section class="scanner-strip">
+        <div class="scanner-header">
+            <div class="scanner-title">
+                <span class="scanner-pulse"></span>
+                <strong>RADAR IA — RANKING DOS MELHORES PARES PARA GRID BOT (TEMPO REAL BINANCE)</strong>
+                <span class="muted-small">Baseado em Oscilação Intradiária (ATR), Liquidez e Velocidade de Fechamento de TP</span>
+            </div>
+            <div class="scanner-actions">
+                <span id="autoPilotStatusText" class="autopilot-pill">🤖 IA selecionou automaticamente o par #1 mais lucrativo</span>
+                <button id="rescanBtn" class="rescan-btn">🔄 Re-escanear Mercado Agora</button>
+            </div>
+        </div>
+        <div id="scannerCardsContainer" class="scanner-cards-row">
+            <!-- Populated dynamically by AI Scanner in app.js -->
+        </div>
+    </section>
+
+    <!-- Main KPI Passive Income Banner -->
+    <section class="kpi-grid">
+        <div class="kpi-card highlight-card">
+            <div class="kpi-header">
+                <span>SALDO TOTAL DA BANCA</span>
+                <span class="tag-compound" id="compoundBadge">Juros Compostos Auto</span>
+            </div>
+            <div class="kpi-main mono" id="totalBalance">$1,000.00</div>
+            <div class="kpi-sub">
+                <span>Em Reais: <strong id="totalBalanceBRL" class="mono">R$ 5.450,00</strong></span>
+                <div style="display:flex; gap:6px;">
+                    <button id="btnDepositWallet" class="withdraw-btn">➕ Depositar</button>
+                    <button id="btnResetWallet" class="link-btn" title="Configurar ou Reiniciar Banca">⚙️</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="kpi-card profit-card">
+            <div class="kpi-header">
+                <span>LUCRO PASSIVO ACUMULADO</span>
+                <span class="kpi-pill positive" id="roiPercent">+0.00%</span>
+            </div>
+            <div class="kpi-main mono positive" id="totalProfit">+$0.00</div>
+            <div class="kpi-sub">
+                <span>Em Reais: <strong id="totalProfitBRL" class="mono positive">+R$ 0,00</strong> | 🏦 Cofre: <strong id="vaultReserveVal" class="mono cyan-text">$0.00</strong></span>
+                <button id="btnWithdraw" class="withdraw-btn">💸 Sacar PIX</button>
+            </div>
+        </div>
+
+        <div class="kpi-card">
+            <div class="kpi-header">
+                <span>PROJEÇÃO MENSAL (AUTO-COMPOUND)</span>
+                <span class="kpi-pill cyan">Renda Passiva</span>
+            </div>
+            <div class="kpi-main mono cyan-text" id="monthlyProjection">$0.00 / mês</div>
+            <div class="kpi-sub">
+                Média por hora: <strong id="hourlyRate" class="mono">$0.00/h</strong>
+            </div>
+        </div>
+
+        <div class="kpi-card">
+            <div class="kpi-header">
+                <span>AUDITORIA & EFICIÊNCIA IA</span>
+                <span class="kpi-pill positive" id="activeStrategyTag">Auto-Grid IA</span>
+            </div>
+            <div class="kpi-main mono" id="winRateDisplay">100% <small>Win Rate</small></div>
+            <div class="kpi-sub">
+                <span>Trades: <strong id="tradeCount" class="mono">0</strong> (<span id="winsLosses" class="mono">0W/0L</span>)</span>
+                <span>🛡️ DD Máx: <strong id="maxDrawdownVal" class="mono positive">0.14%</strong></span>
+            </div>
+        </div>
+    </section>
+
+    <!-- Main Dashboard Grid -->
+    <main class="dashboard-layout">
+        <!-- Left Column: 100% Self-Adapting Autonomous AI Grid Engine -->
+        <aside class="panel config-panel">
+            <div class="panel-header">
+                <h2>🧠 Cérebro Auto-Adaptativo IA</h2>
+                <span class="status-tag active" id="botStateLabel">100% AUTÔNOMO</span>
+            </div>
+
+            <div class="panel-body">
+                <!-- Zero-Touch Autonomous Status Card -->
+                <div class="auto-brain-banner">
+                    <div class="auto-brain-top">
+                        <span class="scanner-pulse"></span>
+                        <strong>MODO "SÓ DEPOSITAR & LUCRAR" ATIVO</strong>
+                    </div>
+                    <p>A IA escaneia os pares, opera no toque exato da grade, trava lucros com Trailing Stop Gain e blinda 25% de cada ganho no Cofre.</p>
+                </div>
+
+                <!-- Real-Time Self-Adapting Telemetry Matrix -->
+                <div class="telemetry-grid">
+                    <div class="telemetry-item">
+                        <span class="telemetry-label">REGIME DE MERCADO (TEMPO REAL)</span>
+                        <strong id="aiRegimeVal" class="mono positive">OSCILAÇÃO LATERAL ALTA 🔥</strong>
+                    </div>
+                    <div class="telemetry-item">
+                        <span class="telemetry-label">MELHOR MERCADO SELECIONADO</span>
+                        <strong id="aiSelectedPairVal" class="mono cyan-text">SOL/USDT (Score 98.4/100)</strong>
+                    </div>
+                    <div class="telemetry-item">
+                        <span class="telemetry-label">ARQUITETURA DE GRADE ELEITA</span>
+                        <strong id="aiGridModeVal" class="mono">⚡ Grid Neutro Bidirecional</strong>
+                    </div>
+                    <div class="telemetry-item">
+                        <span class="telemetry-label">DENSIDADE & ALVO TP AUTO-CALIBRADO</span>
+                        <strong id="aiGridStepVal" class="mono positive">8 Linhas | Step TP: 0.22%</strong>
+                    </div>
+                    <div class="telemetry-item">
+                        <span class="telemetry-label">GESTÃO DE BANCA (CRITÉRIO DE KELLY)</span>
+                        <strong id="aiRiskKellyVal" class="mono warning-text">Lote: 16% | Alavancagem: 12x</strong>
+                    </div>
+                    <div class="telemetry-item">
+                        <span class="telemetry-label">DISJUNTOR GLOBAL ANTI-CRASH BITCOIN</span>
+                        <strong id="btcShieldStatusVal" class="mono positive">🛡️ Escudo BTC Normal (+0.04%)</strong>
+                    </div>
+                    <div class="telemetry-item">
+                        <span class="telemetry-label">META DIÁRIA (+3.0%) & BLINDAGEM</span>
+                        <strong id="dailyGoalStatusVal" class="mono cyan-text">+$0.00 / Meta +3.0% (Ativo)</strong>
+                    </div>
+                    <div class="telemetry-item">
+                        <span class="telemetry-label">ESCUDO & ROTA TAXA ZERO (MEXC / BINANCE)</span>
+                        <strong id="aiShieldVaultVal" class="mono positive">🛡️ Trailing Anchor + Reduce-Only + Cofre 25%</strong>
+                    </div>
+                </div>
+
+                <!-- Live Grid Ladder Matrix -->
+                <div class="control-group">
+                    <div class="label-row">
+                        <label>Matriz de Linhas da Grade (Ao Vivo)</label>
+                        <span id="gridSpreadBadge" class="mono cyan-text">Step ATR Dinâmico</span>
+                    </div>
+                    <div id="gridLadderBox" class="grid-ladder mono">
+                        <!-- Dynamically rendered grid levels -->
+                    </div>
+                </div>
+
+                <!-- Conector Oficial Corretora MEXC Futures (USDT-M) -->
+                <details class="manual-drawer" style="margin-bottom: 8px; border-color: rgba(0, 217, 245, 0.35);">
+                    <summary>🔌 Conectar Corretora MEXC Futures (API Key)</summary>
+                    <div class="drawer-content">
+                        <div class="control-group">
+                            <label>MEXC Access Key (API Key)</label>
+                            <input type="text" id="mexcApiKeyInput" placeholder="Ex: mx0vgl..." class="num-input mono" style="width:100%;">
+                        </div>
+                        <div class="control-group">
+                            <label>MEXC Secret Key (HMAC-SHA256)</label>
+                            <input type="password" id="mexcSecretKeyInput" placeholder="Sua Secret Key da MEXC..." class="num-input mono" style="width:100%;">
+                        </div>
+                        <div class="override-btns">
+                            <button type="button" onclick="testMexcConnectionUI()" class="btn-action buy" style="width:100%;">🔌 Testar & Vincular Conta MEXC</button>
+                        </div>
+                        <small id="mexcConnStatusMsg" class="mono cyan-text" style="display:block; text-align:center; margin-top:4px;">Modo atual: Simulador 100% Fiel MEXC (0% Maker / 0.01% Taker)</small>
+                    </div>
+                </details>
+
+                <!-- Fase 3: Telegram Real-Time Alerts, Exchange Fee Tier & Security PIN Lock -->
+                <details class="manual-drawer" style="margin-bottom: 8px; border-color: rgba(0, 245, 160, 0.28);">
+                    <summary>📲 Alertas Telegram, Taxas & Bloqueio PIN</summary>
+                    <div class="drawer-content">
+                        <div class="control-group">
+                            <label>Telegram Bot Token (@BotFather)</label>
+                            <input type="password" id="telegramTokenInput" placeholder="Ex: 7123456:AAH..." class="num-input mono" style="width:100%;">
+                        </div>
+                        <div class="control-group">
+                            <label>Telegram Chat ID</label>
+                            <input type="text" id="telegramChatIdInput" placeholder="Ex: 123456789" class="num-input mono" style="width:100%;">
+                        </div>
+                        <div class="control-row-2">
+                            <div class="control-group">
+                                <label>Taxa da Corretora</label>
+                                <select id="exchangeFeeSelect" class="num-input mono">
+                                    <option value="MEXC_ZERO" selected>MEXC (0.00% Maker)</option>
+                                    <option value="BINANCE_MAKER">Binance (0.018% Maker)</option>
+                                </select>
+                            </div>
+                            <div class="control-group">
+                                <label>PIN de Segurança</label>
+                                <input type="password" id="securityPinInput" value="2026" maxlength="8" class="num-input mono">
+                            </div>
+                        </div>
+                        <div class="override-btns">
+                            <button type="button" onclick="saveAndTestTelegramConfig()" class="btn-action buy" style="width:100%;">🔔 Salvar & Testar Telegram</button>
+                            <button type="button" onclick="togglePinReadOnlyLock()" id="pinLockToggleBtn" class="btn-action sell" style="width:100%;">🔓 Modo Admin (Bloquear Painel)</button>
+                        </div>
+                        <small id="telegramStatusMsg" class="mono cyan-text" style="display:block; text-align:center; margin-top:4px;"></small>
+                    </div>
+                </details>
+
+                <!-- Hidden/Synced Inputs controlled by the AI Brain (with optional manual override drawer) -->
+                <details class="manual-drawer">
+                    <summary>🔧 Ajustes Finos / Override Manual (Opcional)</summary>
+                    <div class="drawer-content">
+                        <div class="strategy-cards" style="display:none;">
+                            <div class="strat-card active" data-gridmode="neutral"></div>
+                            <div class="strat-card" data-gridmode="long_grid"></div>
+                            <div class="strat-card" data-gridmode="micro_compound"></div>
+                        </div>
+                        <div class="control-row-2">
+                            <div class="control-group">
+                                <label>Linhas da Grade</label>
+                                <select id="gridLevelsSelect" class="num-input mono">
+                                    <option value="4">4 Linhas</option>
+                                    <option value="6">6 Linhas</option>
+                                    <option value="8" selected>8 Linhas</option>
+                                    <option value="10">10 Linhas</option>
+                                </select>
+                            </div>
+                            <div class="control-group">
+                                <label>Alvo TP (%)</label>
+                                <input type="number" id="takeProfitInput" value="0.22" min="0.10" max="3.0" step="0.02" class="num-input mono">
+                            </div>
+                        </div>
+                        <div class="control-group">
+                            <div class="label-row">
+                                <label>Lote (% Banca): <span id="orderSizeVal" class="mono">16%</span></label>
+                                <label>Alav.: <span id="leverageVal" class="mono">12x</span></label>
+                            </div>
+                            <input type="range" id="orderSizeSlider" min="5" max="50" step="1" value="16" class="slider">
+                            <input type="range" id="leverageSlider" min="1" max="50" step="1" value="12" class="slider">
+                        </div>
+                        <input type="hidden" id="stopLossInput" value="0.45">
+                        <input type="checkbox" id="trailingGridToggle" checked style="display:none;">
+                        <input type="checkbox" id="compoundToggle" checked style="display:none;">
+                        <div class="override-btns">
+                            <button id="forceBuyBtn" class="btn-action buy">▲ Forçar LONG</button>
+                            <button id="forceSellBtn" class="btn-action sell">▼ Forçar SHORT</button>
+                        </div>
+                    </div>
+                </details>
+            </div>
+        </aside>
+
+        <!-- Center Column: Live Candlestick & Grid Visual Chart + Active Positions -->
+        <section class="center-column">
+            <!-- Chart Panel -->
+            <div class="panel chart-panel">
+                <div class="panel-header">
+                    <div class="chart-title-group">
+                        <h2>📈 Gráfico <span id="chartPairTitle">SOL/USDT</span> <span class="tf-badge">1m (1 Minuto)</span></h2>
+                        <div class="chart-indicators">
+                            <span class="ind-item ema9">● EMA 9</span>
+                            <span class="ind-item ema21">● EMA 21</span>
+                            <span class="ind-item grid-lines">--- Linhas da Grade / TP</span>
+                        </div>
+                    </div>
+                    <div class="chart-right-meta">
+                        <div class="candle-timer mono">
+                            ⏱️ Fecha vela 1m: <strong id="candleCountdown" class="cyan-text">45s</strong>
+                        </div>
+                        <div class="rsi-meter">
+                            <span>RSI (14):</span>
+                            <strong id="rsiValue" class="mono">51.4</strong>
+                        </div>
+                    </div>
+                </div>
+                <div class="canvas-container">
+                    <canvas id="tradingChart"></canvas>
+                </div>
+
+                <!-- 3 Live Simultaneous Grid Bots for the Top 3 Pairs (#1, #2, #3) — Shared Bankroll, Independent Bot Profits -->
+                <div class="tri-charts-wrapper">
+                    <div class="tri-charts-header">
+                        <span>🤖 3 GRID BOTS SIMULTÂNEOS (MESMA BANCA • LUCRO & GRADE INDEPENDENTES POR BOT)</span>
+                        <small class="cyan-text">Clique em qualquer Bot para inspecionar no gráfico principal</small>
+                    </div>
+                    <div class="tri-charts-grid" id="triChartsGrid">
+                        <div class="tri-chart-card active" id="triCard0" onclick="selectTriChartPair(0)">
+                            <div class="tri-card-top">
+                                <strong id="triTitle0">🥇 BOT #1 • SUI/USDT</strong>
+                                <span class="mono cyan-text" id="triPrice0">$1.2415</span>
+                            </div>
+                            <div class="tri-bot-profit-bar">
+                                <span>💰 Lucro Bot #1: <strong class="mono positive" id="triBotProfit0">+$0.00</strong></span>
+                                <span class="mono" id="triBotRecord0">🏆 0W/0L | 2 Ordens</span>
+                            </div>
+                            <div class="tri-card-sub">
+                                <span id="triMeta0">Grade: L1 + L2 Ativas</span>
+                                <strong class="mono positive" id="triPnl0">PNL: +$0.00</strong>
+                            </div>
+                            <div class="tri-canvas-wrap">
+                                <canvas id="triCanvas0"></canvas>
+                            </div>
+                        </div>
+
+                        <div class="tri-chart-card" id="triCard1" onclick="selectTriChartPair(1)">
+                            <div class="tri-card-top">
+                                <strong id="triTitle1">🥈 BOT #2 • NEAR/USDT</strong>
+                                <span class="mono cyan-text" id="triPrice1">$5.2050</span>
+                            </div>
+                            <div class="tri-bot-profit-bar">
+                                <span>💰 Lucro Bot #2: <strong class="mono positive" id="triBotProfit1">+$0.00</strong></span>
+                                <span class="mono" id="triBotRecord1">🏆 0W/0L | 2 Ordens</span>
+                            </div>
+                            <div class="tri-card-sub">
+                                <span id="triMeta1">Grade: L1 + L2 Ativas</span>
+                                <strong class="mono positive" id="triPnl1">PNL: +$0.00</strong>
+                            </div>
+                            <div class="tri-canvas-wrap">
+                                <canvas id="triCanvas1"></canvas>
+                            </div>
+                        </div>
+
+                        <div class="tri-chart-card" id="triCard2" onclick="selectTriChartPair(2)">
+                            <div class="tri-card-top">
+                                <strong id="triTitle2">🥉 BOT #3 • RENDER/USDT</strong>
+                                <span class="mono cyan-text" id="triPrice2">$1.9960</span>
+                            </div>
+                            <div class="tri-bot-profit-bar">
+                                <span>💰 Lucro Bot #3: <strong class="mono positive" id="triBotProfit2">+$0.00</strong></span>
+                                <span class="mono" id="triBotRecord2">🏆 0W/0L | 2 Ordens</span>
+                            </div>
+                            <div class="tri-card-sub">
+                                <span id="triMeta2">Grade: L1 + L2 Ativas</span>
+                                <strong class="mono positive" id="triPnl2">PNL: +$0.00</strong>
+                            </div>
+                            <div class="tri-canvas-wrap">
+                                <canvas id="triCanvas2"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Active Open Positions & Database Trade History -->
+            <div class="panel positions-panel">
+                <div class="tabs-header">
+                    <div class="tabs-left">
+                        <button class="tab-btn active" data-tab="activePos">
+                            🕸️ Ordens Ativas na Grade (<span id="openPosCount">0</span>)
+                        </button>
+                        <button class="tab-btn" data-tab="historyTab">
+                            🗄️ Histórico Salvo no Database (<span id="closedPosCount">0</span>)
+                        </button>
+                    </div>
+                    <div class="db-toolbar">
+                        <span id="dbStatusBadge" class="db-badge online">🟢 DB Conectado</span>
+                        <a href="/api/export-csv" target="_blank" class="db-export-btn" title="Exportar histórico completo do banco de dados em CSV/Excel">📥 Baixar CSV</a>
+                    </div>
+                </div>
+
+                <!-- Active Positions Table -->
+                <div id="activePosContent" class="tab-content active">
+                    <div class="table-wrap">
+                        <table class="trade-table">
+                            <thead>
+                                <tr>
+                                    <th>PAR / NÍVEL GRADE</th>
+                                    <th>LOTE (ALAV.)</th>
+                                    <th>ENTRADA NA GRADE</th>
+                                    <th>PREÇO ATUAL</th>
+                                    <th>ALVO TAKE PROFIT</th>
+                                    <th>PNL EM ABERTO</th>
+                                    <th>AÇÃO</th>
+                                </tr>
+                            </thead>
+                            <tbody id="openPositionsBody">
+                                <tr class="empty-row">
+                                    <td colspan="7">Grid Bot posicionando linhas de compra e venda...</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Closed Trades Table (Persisted in Database) -->
+                <div id="historyTabContent" class="tab-content">
+                    <div class="table-wrap">
+                        <table class="trade-table">
+                            <thead>
+                                <tr>
+                                    <th>DATA / HORA</th>
+                                    <th>PAR / NÍVEL</th>
+                                    <th>LADO</th>
+                                    <th>ENTRADA ➔ SAÍDA TP</th>
+                                    <th>LUCRO (USDT)</th>
+                                    <th>LUCRO (BRL)</th>
+                                    <th>SALDO BANCA</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tradeHistoryBody">
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Right Column: Live Orderbook & AI Neural Terminal Log -->
+        <aside class="right-column">
+            <!-- Orderbook Panel -->
+            <div class="panel orderbook-panel">
+                <div class="panel-header">
+                    <h2>📊 Livro de Ofertas (Orderbook)</h2>
+                    <span class="mono muted-small">Spread: 0.01%</span>
+                </div>
+                <div class="orderbook-body mono">
+                    <div class="ob-head">
+                        <span>PREÇO (USDT)</span>
+                        <span>QTD</span>
+                        <span>TOTAL</span>
+                    </div>
+                    <div id="orderbookAsks" class="ob-side asks"></div>
+                    <div id="orderbookMid" class="ob-mid">
+                        <span id="obCenterPrice">$65,420.50</span>
+                        <small id="obDirectionArrow">▲</small>
+                    </div>
+                    <div id="orderbookBids" class="ob-side bids"></div>
+                </div>
+            </div>
+
+            <!-- AI Log Terminal -->
+            <div class="panel terminal-panel">
+                <div class="panel-header">
+                    <h2>🧠 Terminal Neural do Robô</h2>
+                    <span class="live-indicator">LIVE</span>
+                </div>
+                <div id="aiTerminal" class="terminal-output mono"></div>
+            </div>
+        </aside>
+    </main>
+
+    <!-- Modal for PIX Withdrawal / Editing Initial Capital -->
+    <div id="modalOverlay" class="modal-overlay hidden">
+        <div class="modal-box">
+            <div class="modal-header">
+                <h3 id="modalTitle">Simular Saque de Renda Passiva</h3>
+                <button id="closeModalBtn" class="close-btn">&times;</button>
+            </div>
+            <div id="modalBody" class="modal-body"></div>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
