@@ -1600,6 +1600,12 @@ async function loadStateFromDatabase() {
                     state.vaultBalance = typeof w.vaultBalance === 'number' ? w.vaultBalance : Math.max(0, state.totalProfit * 0.25);
                     state.wins = w.wins || 0;
                     state.losses = w.losses || 0;
+                    if (w.botStartedAt && Number(w.botStartedAt) > 0) {
+                        state.botStartedAt = Number(w.botStartedAt);
+                    } else if (!state.botStartedAt) {
+                        state.botStartedAt = Date.now();
+                    }
+                    updateBotUptimeDisplay();
                     saveStateToStorage();
 
                     const dailyEl = document.getElementById('dailyGoalStatusVal');
@@ -2155,13 +2161,14 @@ function initEvents() {
         `);
 
         document.getElementById('saveCapitalBtn').onclick = async () => {
-            const val = parseFloat(document.getElementById('newCapitalInput').value) || 1000;
+            const val = parseFloat(document.getElementById('newCapitalInput').value) || 10;
             const clearHist = document.getElementById('clearDbCheckbox').checked;
             state.initialCapital = val;
             state.walletBalance = val;
             state.totalProfit = 0;
             state.wins = 0;
             state.losses = 0;
+            state.botStartedAt = Date.now();
             state.openPositions = [];
             if (clearHist) state.closedTrades = [];
 
@@ -2174,6 +2181,7 @@ function initEvents() {
             } catch (e) {}
 
             saveStateToStorage();
+            updateBotUptimeDisplay();
             updateKPIDashboard();
             renderOpenPositions();
             renderTradeHistory();
@@ -2183,9 +2191,32 @@ function initEvents() {
     });
 }
 
+function updateBotUptimeDisplay() {
+    if (!state.botStartedAt) state.botStartedAt = Date.now();
+    const elapsedSec = Math.max(0, Math.floor((Date.now() - state.botStartedAt) / 1000));
+    const days = Math.floor(elapsedSec / 86400);
+    const hours = Math.floor((elapsedSec % 86400) / 3600);
+    const mins = Math.floor((elapsedSec % 3600) / 60);
+    const secs = elapsedSec % 60;
+    const pad = (n) => String(n).padStart(2, '0');
+    const formatted = `${pad(days)}d ${pad(hours)}h ${pad(mins)}m ${pad(secs)}s`;
+
+    const headerEl = document.getElementById('botUptimeCounter');
+    if (headerEl) {
+        headerEl.textContent = `⏱️ ${formatted}`;
+    }
+    const kpiEl = document.getElementById('botUptimeKpiVal');
+    if (kpiEl) {
+        kpiEl.textContent = formatted;
+    }
+}
+
 // Real-Time UI Loop (Visualizes the 24/7 Server Engine state across all open tabs)
 let autoAdaptCounter = 0;
 function startEngineLoop() {
+    updateBotUptimeDisplay();
+    setInterval(updateBotUptimeDisplay, 1000);
+
     setInterval(() => {
         if (!state.priceSynced) return;
         const nextPrice = state.liveAnchorPrice || state.currentPrice;
@@ -2211,6 +2242,7 @@ function startEngineLoop() {
     document.addEventListener('visibilitychange', async () => {
         if (document.visibilityState === 'visible') {
             await loadStateFromDatabase();
+            updateBotUptimeDisplay();
             updateKPIDashboard();
             drawTradingChart();
         }
