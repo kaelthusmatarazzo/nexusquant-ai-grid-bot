@@ -548,12 +548,12 @@ function sendTelegramAlert(messageText) {
 function getDynamicGridParams(sym) {
     const cfg = PAIR_CONFIGS[sym] || PAIR_CONFIGS.SOLUSDT;
     const atr = cfg.atrPct || 4.0;
-    const volFactor = Math.max(0.95, Math.min(1.12, atr / 4.2));
+    const volFactor = Math.max(0.95, Math.min(1.15, atr / 4.2));
     return {
-        l1TpPct: Number((0.32 * volFactor).toFixed(3)),        // +0.30% to +0.35% Limit TP on L1 (0% Maker Exit Fee -> +$2.70 Net Win on $1000 bankroll!)
-        l2TpPct: Number((0.26 * volFactor).toFixed(3)),        // +0.25% to +0.29% Limit TP after L2 merge (0% Maker Exit Fee -> +$3.10 Net Win!)
-        l3TpPct: Number((0.22 * volFactor).toFixed(3)),
-        staggerStepPct: 0.18                                   // -0.18% L2 Limit Order (pulls average entry down without bloating dollar risk)
+        l1TpPct: Number((0.36 * volFactor).toFixed(3)),        // +0.34% to +0.40% Limit TP on L1 (0% Maker Exit Fee -> High Payoff + Half Fees!)
+        l2TpPct: Number((0.28 * volFactor).toFixed(3)),        // +0.27% to +0.32% Limit TP after 1:1 L2 merge (0% Maker Exit Fee!)
+        l3TpPct: Number((0.24 * volFactor).toFixed(3)),
+        staggerStepPct: 0.22                                   // -0.22% Equal-Weight L2 Limit Order (pulls average entry 50% down to -0.11%!)
     };
 }
 
@@ -584,24 +584,25 @@ function computeEma(values, period) {
     return ema;
 }
 
-// v8.5 Trend-Confirmed Direction Filter (Removed Ping-Pong Auto-Flip that caused LONG->SHORT->LONG whipsaw stops)
+// v8.9 Strict Trend-Following Direction Filter (Fixes Bot #3 blind LONG entries during market downtrends!)
 function computeSmartBotDirection(sym, rankIdx, btcShieldActive) {
     if (btcShieldActive) return 'SHORT';
     const hist = (db.liveState.priceHistory && db.liveState.priceHistory[sym]) || [];
     const rsi = computePairRsi1m(sym);
 
-    if (hist.length >= 8) {
-        const emaFast = computeEma(hist.slice(-8), 4);
-        const emaSlow = computeEma(hist.slice(-20), 12);
-        const momentumPct = ((hist[hist.length - 1] - hist[Math.max(0, hist.length - 6)]) / hist[Math.max(0, hist.length - 6)]) * 100;
-        if (rsi <= 32 && momentumPct > -0.15) return 'LONG';   // Confirmed oversold bounce
-        if (rsi >= 68 && momentumPct < 0.15) return 'SHORT';   // Confirmed overbought rejection
-        if (emaFast > emaSlow * 1.00015 && momentumPct >= 0) return 'LONG';
-        if (emaFast < emaSlow * 0.99985 && momentumPct <= 0) return 'SHORT';
+    if (hist.length >= 4) {
+        const emaFast = computeEma(hist.slice(-6), 3);
+        const emaSlow = computeEma(hist.slice(-18), 10);
+        const refIdx = Math.max(0, hist.length - 6);
+        const momentumPct = ((hist[hist.length - 1] - hist[refIdx]) / hist[refIdx]) * 100;
+        if (rsi <= 30 && momentumPct > -0.08) return 'LONG';   // Oversold turning up
+        if (rsi >= 70 && momentumPct < 0.08) return 'SHORT';   // Overbought turning down
+        // Strictly trade WITH the immediate trend slope (NEVER buy a falling knife on Bot #3!)
+        if (emaFast < emaSlow || momentumPct < -0.02) return 'SHORT';
+        if (emaFast > emaSlow || momentumPct > 0.02) return 'LONG';
     }
-    if (rsi >= 58) return 'SHORT';
-    if (rsi <= 42) return 'LONG';
-    return (rankIdx === 1) ? 'SHORT' : 'LONG';
+    if (rsi < 50) return 'SHORT';
+    return 'LONG';
 }
 
 
@@ -745,16 +746,15 @@ function serverOpenPositionForPair(sym, side, reason, gridLevel = 'L1', customTp
     const activeTradingBankroll = Math.max(initCap * 0.5, (Number(db.wallet.walletBalance) || initCap) - vaultReserve);
     const baseCapital = db.gridConfig.compoundEnabled !== false ? activeTradingBankroll : initCap;
 
-    // v8.8 Symmetric Positive-Payoff Sizing (Guarantees Avg Win >= Avg Loss, ZERO 5x Martingale Loss Bombs!):
-    // L1 (FILLED) = 5.5% margin ($55 on $1000 / $0.55 on $10 -> TP +0.32% = +$2.50 Net Win, Max SL -0.22% = -$1.98 Net Loss!)
-    // L2 (PENDING_LIMIT 0% Maker at -0.18%) = 2.5% margin ($25 on $1000 -> merged $80 margin, SL capped at -0.155% = -$2.08 Net Loss, TP +0.26% = +$2.95 Net Win!)
+    // v8.9 Wide-Channel Anti-Stop-Hunt & Half-Fee Sizing (1:1 Equal-Weight L1=2.6% + L2=2.6%):
+    // Cuts exchange fees by 53% AND widens L1+L2 survival channel from -0.221% to -0.41% (+0.19% room below L2 instead of 0.041%!)
     const isL2Order = orderStatus === 'PENDING_LIMIT' || (gridLevel || '').startsWith('L2');
-    const orderSizePct = isL2Order ? 2.5 : 5.5;
+    const orderSizePct = isL2Order ? 2.6 : 2.6;
     const leverage = Math.max(15, Number(db.gridConfig.leverage) || 15);
-    const margin = Math.max(isL2Order ? 0.25 : 0.55, Number((baseCapital * (orderSizePct / 100)).toFixed(4)));
+    const margin = Math.max(0.26, Number((baseCapital * (orderSizePct / 100)).toFixed(4)));
 
     const tpPct = customTpPct || dyn.l1TpPct;
-    const slPct = 0.22;
+    const slPct = 0.42;
 
     const tpPrice = side === 'LONG'
         ? entryPrice * (1 + tpPct / 100)
@@ -832,8 +832,8 @@ function serverClosePosition(pos, exitPrice, pnlUSD, closeReason) {
     const lev = Number(pos.leverage) || 15;
     const totalNotionalUSD = (Number(pos.margin) || 0.5) * lev;
     const dcaStage = Number(pos.dcaCount) || 0;
-    // Entry Leg Fee: L1 opens as Market Taker (5.5/8.0 = 0.6875 of merged notional); L2 opens as Limit Maker (0.00% Fee!)
-    const l1Share = dcaStage >= 1 ? 0.6875 : 1.00;
+    // Entry Leg Fee: L1 opens as Market Taker (50% of merged 1:1 notional); L2 opens as Limit Maker (0.00% Fee!)
+    const l1Share = dcaStage >= 1 ? 0.50 : 1.00;
     const l1EntryNotionalUSD = totalNotionalUSD * l1Share;
     const entryFeeUSD = l1EntryNotionalUSD * (takerRatePct / 100);
     // Exit Leg Fee: Fixed TP executes as resting Limit Maker (0.00%); Trailing / Breakeven / Stop-Loss execute as Market Taker (0.02%)
@@ -1047,10 +1047,10 @@ setInterval(async () => {
                 primaryL1.margin = combinedMargin;
                 primaryL1.wasPendingLimit = true; // 0.00% Maker Fee on MEXC!
                 primaryL1.dcaCount = (primaryL1.dcaCount || 0) + 1;
-                primaryL1.tpPct = 0.26; // +0.26% Limit TP on merged L1+L2 ($1200 notional on $1000 bankroll) = +$3.12 Gross / +$2.95 Net Win (0% Maker Exit Fee)!
-                // At -0.18% L2 fill with 5.5%:2.5% weights, price is -0.124% from new avg entry.
-                // Capping slPct at 0.165% caps max dollar loss at -$1.98 Gross / -$2.25 Net (STRICTLY SMALLER than +$2.50-$2.95 Net Wins!)
-                primaryL1.slPct = 0.165;
+                primaryL1.tpPct = 0.28; // +0.28% Limit TP on 1:1 merged L1+L2 (0% Maker Exit Fee!)
+                // At -0.22% L2 fill with 1:1 equal weights (2.6% : 2.6%), new avg entry is -0.11% from L1 (only -0.11% from current price!).
+                // Setting slPct = 0.30% gives +0.19% OF PURE BREATHING ROOM BELOW L2 (total -0.41% channel from L1 vs -0.221% in v8.8)!
+                primaryL1.slPct = 0.30;
                 primaryL1.justMergedAt = Date.now();
                 primaryL1.tpPrice = primaryL1.side === 'LONG'
                     ? primaryL1.entryPrice * (1 + primaryL1.tpPct / 100)
@@ -1066,7 +1066,7 @@ setInterval(async () => {
                     id: pos.id + '-FILL-MERGE',
                     type: 'entry',
                     timestamp: Date.now(),
-                    message: `⚡ [MEXC LIMIT L2 EXECUTADA 0% TAXA] ${pos.pair} absorveu recuo @ $${limitFillPrice.toFixed(cfg.decimals)}! Novo Preço Médio: $${primaryL1.entryPrice.toFixed(cfg.decimals)} ➔ Alvo Lucro: +$${(primaryL1.margin * primaryL1.leverage * (primaryL1.tpPct / 100)).toFixed(2)}`
+                    message: `⚡ [MEXC LIMIT L2 EXECUTADA 0% TAXA] ${pos.pair} absorveu recuo @ $${limitFillPrice.toFixed(cfg.decimals)}! Novo Preço Médio colado (-0.11%): $${primaryL1.entryPrice.toFixed(cfg.decimals)} ➔ Alvo Lucro: +$${(primaryL1.margin * primaryL1.leverage * (primaryL1.tpPct / 100)).toFixed(2)}`
                 };
                 continue;
             }
@@ -1075,7 +1075,7 @@ setInterval(async () => {
             const distFromMarketPct = pos.side === 'LONG'
                 ? ((price - pos.entryPrice) / pos.entryPrice) * 100
                 : ((pos.entryPrice - price) / pos.entryPrice) * 100;
-            if (distFromMarketPct >= 0.28) {
+            if (distFromMarketPct >= 0.30) {
                 const dyn = getDynamicGridParams(sym);
                 pos.entryPrice = pos.side === 'LONG'
                     ? price * (1 - dyn.staggerStepPct / 100)
@@ -1112,7 +1112,7 @@ setInterval(async () => {
 
         // A. Real Price hit this Filled Position's Take Profit (Resting Limit Order on MEXC Book -> Fills at exact tpPrice)!
         if (diffPct >= pos.tpPct) {
-            const executedTpPct = Number(pos.tpPct) || 0.32;
+            const executedTpPct = Number(pos.tpPct) || 0.36;
             const exactTpExitPrice = pos.side === 'LONG'
                 ? pos.entryPrice * (1 + executedTpPct / 100)
                 : pos.entryPrice * (1 - executedTpPct / 100);
@@ -1123,14 +1123,14 @@ setInterval(async () => {
             continue;
         }
 
-        // B. v8.8 High-Floor Profit Lock (Guarantees every Trailing/Breakeven Win pays +$1.75 to +$2.40 on $1000 bankroll, ZERO $0.29 micro-wins!)
+        // B. v8.9 High-Winrate Profit Lock (Arms at +0.18% on L1+L2 / +0.21% on L1 so winning moves lock profit immediately!)
         const dcaStage = Number(pos.dcaCount) || 0;
         const isMergedL2 = dcaStage > 0 || (pos.gridLevel || '').includes('+L2');
-        const beTriggerPct = isMergedL2 ? 0.21 : 0.25;
-        const trailTriggerPct = isMergedL2 ? 0.24 : 0.28;
+        const beTriggerPct = isMergedL2 ? 0.18 : 0.21;
+        const trailTriggerPct = isMergedL2 ? 0.23 : 0.27;
         if (diffPct >= beTriggerPct && !pos.breakevenLocked) {
             pos.breakevenLocked = true;
-            pos.lockFloorPct = Math.max(pos.lockFloorPct || 0, isMergedL2 ? 0.18 : 0.22);
+            pos.lockFloorPct = Math.max(pos.lockFloorPct || 0, isMergedL2 ? 0.15 : 0.18);
             if (!(pos.gridLevel || '').includes('🛡️')) {
                 pos.gridLevel = `${pos.gridLevel || 'L1'} 🛡️`;
             }
@@ -1138,12 +1138,12 @@ setInterval(async () => {
         // Stage 2: Once trade reaches trailTriggerPct, ratchet the profit floor dynamically just 0.03% behind peak!
         if (diffPct >= trailTriggerPct) {
             pos.trailingLocked = true;
-            pos.lockFloorPct = Math.max(pos.lockFloorPct || 0.22, Number((diffPct - 0.03).toFixed(4)));
+            pos.lockFloorPct = Math.max(pos.lockFloorPct || 0.20, Number((diffPct - 0.03).toFixed(4)));
         }
 
         if ((pos.breakevenLocked || pos.trailingLocked) && diffPct <= pos.lockFloorPct) {
             // Exchange Stop-Market Trigger Execution: Fills at the resting trigger price (lockFloorPct) minus 0.01% book slippage
-            const realisticMarketPct = Math.max(isMergedL2 ? 0.17 : 0.21, pos.lockFloorPct - 0.01);
+            const realisticMarketPct = Math.max(isMergedL2 ? 0.14 : 0.17, pos.lockFloorPct - 0.01);
             const lockExitPrice = pos.side === 'LONG'
                 ? pos.entryPrice * (1 + realisticMarketPct / 100)
                 : pos.entryPrice * (1 - realisticMarketPct / 100);
