@@ -2,7 +2,7 @@
   "meta": {
     "engine": "NexusQuant GridDB v6.1 (MEXC Positive Payoff Grid)",
     "createdAt": "2026-09-29T07:52:30.665Z",
-    "updatedAt": "2026-11-16T13:17:44.356Z",
+    "updatedAt": "2026-11-16T13:18:10.373Z",
     "totalSavedTrades": 1000,
     "recalibratedRealisticWinRate": true
   },
@@ -109,46 +109,34 @@
     "compoundEnabled": true
   },
   "liveState": {
-    "currentPrice": 0.7138,
-    "liveAnchorPrice": 0.7138,
+    "currentPrice": 0.7136,
+    "liveAnchorPrice": 0.7136,
     "simOffset": 0,
     "trendMomentum": 0,
     "lastEvent": {
-      "id": "GRD-116858-OPEN",
+      "id": "GRD-116858-FILL-MERGE",
       "type": "entry",
-      "timestamp": 1794834964310,
-      "message": "⏳ [MEXC LIMIT • AVAX/USDT] Posicionou Ordem Pendente L2 (#3🥉) LONG (0% Maker) @ $7.08 ➔ TP: $7.10"
+      "timestamp": 1794835068358,
+      "message": "⚡ [MEXC LIMIT L2 EXECUTADA 0% TAXA] AVAX/USDT absorveu recuo @ $7.09! Novo Preço Médio colado (-0.11%): $7.09 ➔ Alvo Lucro: +$0.13"
     },
     "prices": {
-      "BTCUSDT": 64244.41,
-      "ETHUSDT": 1804.9,
-      "BNBUSDT": 588.2,
-      "XRPUSDT": 0.9516,
+      "BTCUSDT": 64243.17,
+      "ETHUSDT": 1804.62,
+      "BNBUSDT": 588.02,
+      "XRPUSDT": 0.9511,
       "FETUSDT": 0.1287,
-      "DOGEUSDT": 0.05848,
-      "SOLUSDT": 71.11,
-      "AVAXUSDT": 7.088,
-      "NEARUSDT": 3.142,
+      "DOGEUSDT": 0.05843,
+      "SOLUSDT": 71.1,
+      "AVAXUSDT": 7.087,
+      "NEARUSDT": 3.14,
       "INJUSDT": 6.668,
-      "SUIUSDT": 0.7138,
-      "SEIUSDT": 0.03874,
-      "WIFUSDT": 0.1311,
-      "RENDERUSDT": 1.36
+      "SUIUSDT": 0.7136,
+      "SEIUSDT": 0.03871,
+      "WIFUSDT": 0.1309,
+      "RENDERUSDT": 1.359
     },
     "priceHistory": {
       "BTCUSDT": [
-        64294.84,
-        64320.33,
-        64313.92,
-        64329.11,
-        64334.76,
-        64327.56,
-        64326.77,
-        64304.47,
-        64296.26,
-        64296.62,
-        64302.21,
-        64295.03,
         64294.87,
         64300.39,
         64297.59,
@@ -181,22 +169,21 @@
         64250.7,
         64248.67,
         64244.46,
-        64244.41
+        64244.41,
+        64228.73,
+        64224.53,
+        64233.08,
+        64234.11,
+        64244.39,
+        64251.88,
+        64257.25,
+        64248.03,
+        64250.63,
+        64250.62,
+        64243.16,
+        64243.17
       ],
       "ETHUSDT": [
-        1805.61,
-        1806.3,
-        1806.09,
-        1806.91,
-        1806.65,
-        1806,
-        1805.99,
-        1805.46,
-        1805.13,
-        1805.02,
-        1805.4,
-        1804.78,
-        1804.93,
         1805.13,
         1806,
         1806.47,
@@ -228,19 +215,22 @@
         1804.97,
         1804.91,
         1804.92,
-        1804.9
+        1804.9,
+        1804.15,
+        1804.05,
+        1804.54,
+        1804.59,
+        1804.87,
+        1805.02,
+        1805.12,
+        1805.13,
+        1804.96,
+        1804.95,
+        1804.93,
+        1804.51,
+        1804.62
       ],
       "BNBUSDT": [
-        587.99,
-        588.25,
-        588.33,
-        588.46,
-        588.37,
-        588.66,
-        588.71,
-        588.57,
-        588.55,
-        588.37,
         588.39,
         588.4,
         588.41,
@@ -275,15 +265,19 @@
         588.21,
         588.2,
         588.21,
-        588.2
+        588.2,
+        587.98,
+        588.06,
+        588.12,
+        588.18,
+        588.17,
+        588.13,
+        588.12,
+        588.13,
+        587.97,
+        588.02
       ],
       "XRPUSDT": [
-        0.9504,
-        0.9507,
-        0.9514,
-        0.9518,
-        0.952,
-        0.9523,
         0.9526,
         0.9533,
         0.9526,
@@ -322,7 +316,13 @@
         0.9514,
         0.9516,
         0.9515,
-        0.9516
+        0.9516,
+        0.9511,
+        0.9509,
+        0.9511,
+        0.9515,
+        0.9514,
+        0.9511
       ],
       "FETUSDT": [
         0.1289,
@@ -372,14 +372,6 @@
         0.1287
       ],
       "DOGEUSDT": [
-        0.05831,
-        0.0583,
-        0.05831,
-        0.05832,
-        0.05835,
-        0.05837,
-        0.05838,
-        0.05836,
         0.05834,
         0.05837,
         0.05841,
@@ -416,16 +408,17 @@
         0.05848,
         0.05847,
         0.05849,
-        0.05848
+        0.05848,
+        0.05844,
+        0.05847,
+        0.05846,
+        0.05847,
+        0.05845,
+        0.05846,
+        0.05844,
+        0.05843
       ],
       "SOLUSDT": [
-        70.88,
-        70.89,
-        70.94,
-        70.96,
-        71.01,
-        71,
-        70.94,
         70.95,
         70.99,
         71.02,
@@ -463,13 +456,16 @@
         71.12,
         71.11,
         71.12,
-        71.11
+        71.11,
+        71.07,
+        71.09,
+        71.12,
+        71.13,
+        71.11,
+        71.09,
+        71.1
       ],
       "AVAXUSDT": [
-        7.058,
-        7.064,
-        7.067,
-        7.066,
         7.068,
         7.067,
         7.066,
@@ -510,12 +506,13 @@
         7.093,
         7.089,
         7.09,
-        7.088
+        7.088,
+        7.086,
+        7.084,
+        7.086,
+        7.087
       ],
       "NEARUSDT": [
-        3.125,
-        3.124,
-        3.125,
         3.126,
         3.125,
         3.126,
@@ -557,14 +554,12 @@
         3.144,
         3.143,
         3.141,
-        3.142
+        3.142,
+        3.139,
+        3.141,
+        3.14
       ],
       "INJUSDT": [
-        6.627,
-        6.628,
-        6.626,
-        6.624,
-        6.625,
         6.627,
         6.624,
         6.627,
@@ -604,19 +599,14 @@
         6.671,
         6.67,
         6.669,
+        6.668,
+        6.666,
+        6.664,
+        6.668,
+        6.67,
         6.668
       ],
       "SUIUSDT": [
-        0.7118,
-        0.7116,
-        0.7118,
-        0.712,
-        0.7122,
-        0.7126,
-        0.7122,
-        0.7125,
-        0.7128,
-        0.7134,
         0.7137,
         0.7138,
         0.7142,
@@ -651,12 +641,19 @@
         0.7139,
         0.714,
         0.7139,
-        0.7138
+        0.7138,
+        0.7136,
+        0.7135,
+        0.7136,
+        0.7137,
+        0.7139,
+        0.714,
+        0.7141,
+        0.714,
+        0.7139,
+        0.7136
       ],
       "SEIUSDT": [
-        0.03874,
-        0.03877,
-        0.03879,
         0.03878,
         0.03877,
         0.03876,
@@ -698,11 +695,12 @@
         0.03877,
         0.03876,
         0.03875,
-        0.03874
+        0.03874,
+        0.03871,
+        0.03872,
+        0.03871
       ],
       "WIFUSDT": [
-        0.1311,
-        0.131,
         0.1309,
         0.1308,
         0.1309,
@@ -745,10 +743,11 @@
         0.1312,
         0.1311,
         0.1312,
-        0.1311
+        0.1311,
+        0.131,
+        0.1309
       ],
       "RENDERUSDT": [
-        1.361,
         1.362,
         1.361,
         1.36,
@@ -792,7 +791,8 @@
         1.361,
         1.362,
         1.361,
-        1.36
+        1.36,
+        1.359
       ]
     },
     "botStats": {
@@ -801,8 +801,8 @@
         "pair": "SOL/USDT",
         "realizedProfitUSD": -3.1833,
         "realizedProfitBRL": -17.35,
-        "floatingPnlUSD": 0.0066,
-        "totalBotProfitUSD": -3.1767,
+        "floatingPnlUSD": 0.0033,
+        "totalBotProfitUSD": -3.18,
         "wins": 198,
         "losses": 94,
         "winRate": 68,
@@ -813,15 +813,15 @@
         ],
         "dynamicL1TpPct": 0.342,
         "dynamicL2TpPct": 0.266,
-        "rsi1m": 60.9
+        "rsi1m": 57.5
       },
       "SUIUSDT": {
         "symbol": "SUIUSDT",
         "pair": "SUI/USDT",
         "realizedProfitUSD": -6.4408,
         "realizedProfitBRL": -35.1,
-        "floatingPnlUSD": 0.0033,
-        "totalBotProfitUSD": -6.4375,
+        "floatingPnlUSD": -0.0033,
+        "totalBotProfitUSD": -6.4441,
         "wins": 229,
         "losses": 118,
         "winRate": 66,
@@ -832,7 +832,7 @@
         ],
         "dynamicL1TpPct": 0.365,
         "dynamicL2TpPct": 0.284,
-        "rsi1m": 60.3
+        "rsi1m": 49.4
       },
       "WIFUSDT": {
         "symbol": "WIFUSDT",
@@ -880,26 +880,25 @@
         "activeLevels": [],
         "dynamicL1TpPct": 0.342,
         "dynamicL2TpPct": 0.266,
-        "rsi1m": 60.7
+        "rsi1m": 55.5
       },
       "AVAXUSDT": {
         "symbol": "AVAXUSDT",
         "pair": "AVAX/USDT",
         "realizedProfitUSD": -2.1726,
         "realizedProfitBRL": -11.84,
-        "floatingPnlUSD": -0.0198,
-        "totalBotProfitUSD": -2.1924,
+        "floatingPnlUSD": -0.0177,
+        "totalBotProfitUSD": -2.1903,
         "wins": 59,
         "losses": 34,
         "winRate": 63,
-        "activeOrdersCount": 2,
+        "activeOrdersCount": 1,
         "activeLevels": [
-          "L1 (#3🥉)⚡",
-          "L2 (#3🥉)⏳"
+          "L1+L2 (#3🥉)⚡"
         ],
         "dynamicL1TpPct": 0.351,
         "dynamicL2TpPct": 0.273,
-        "rsi1m": 64
+        "rsi1m": 59.3
       },
       "INJUSDT": {
         "symbol": "INJUSDT",
@@ -915,7 +914,7 @@
         "activeLevels": [],
         "dynamicL1TpPct": 0.414,
         "dynamicL2TpPct": 0.322,
-        "rsi1m": 66.1
+        "rsi1m": 65.6
       },
       "NEARUSDT": {
         "symbol": "NEARUSDT",
@@ -929,9 +928,9 @@
         "winRate": 64,
         "activeOrdersCount": 0,
         "activeLevels": [],
-        "dynamicL1TpPct": 0.387,
+        "dynamicL1TpPct": 0.388,
         "dynamicL2TpPct": 0.301,
-        "rsi1m": 61.9
+        "rsi1m": 59.4
       },
       "RENDERUSDT": {
         "symbol": "RENDERUSDT",
@@ -947,7 +946,7 @@
         "activeLevels": [],
         "dynamicL1TpPct": 0.353,
         "dynamicL2TpPct": 0.275,
-        "rsi1m": 49.1
+        "rsi1m": 47.3
       },
       "SEIUSDT": {
         "symbol": "SEIUSDT",
@@ -963,7 +962,7 @@
         "activeLevels": [],
         "dynamicL1TpPct": 0.342,
         "dynamicL2TpPct": 0.266,
-        "rsi1m": 50
+        "rsi1m": 45.1
       },
       "XRPUSDT": {
         "symbol": "XRPUSDT",
@@ -979,7 +978,7 @@
         "activeLevels": [],
         "dynamicL1TpPct": 0.342,
         "dynamicL2TpPct": 0.266,
-        "rsi1m": 55.8
+        "rsi1m": 42.3
       },
       "ETHUSDT": {
         "symbol": "ETHUSDT",
@@ -995,7 +994,7 @@
         "activeLevels": [],
         "dynamicL1TpPct": 0.342,
         "dynamicL2TpPct": 0.266,
-        "rsi1m": 47.7
+        "rsi1m": 48.1
       },
       "BNBUSDT": {
         "symbol": "BNBUSDT",
@@ -1011,7 +1010,7 @@
         "activeLevels": [],
         "dynamicL1TpPct": 0.342,
         "dynamicL2TpPct": 0.266,
-        "rsi1m": 52.9
+        "rsi1m": 44
       },
       "BTCUSDT": {
         "symbol": "BTCUSDT",
@@ -1027,7 +1026,7 @@
         "activeLevels": [],
         "dynamicL1TpPct": 0.342,
         "dynamicL2TpPct": 0.266,
-        "rsi1m": 43.8
+        "rsi1m": 43.1
       }
     },
     "pairCooldowns": {
@@ -1123,9 +1122,9 @@
     ],
     "btcCircuitBreaker": {
       "active": false,
-      "btcDeltaPct": -0.078,
+      "btcDeltaPct": -0.08,
       "mode": "NORMAL_SAFE",
-      "label": "🛡️ Escudo BTC Normal (-0.078%)"
+      "label": "🛡️ Escudo BTC Normal (-0.08%)"
     }
   },
   "openPositions": [
@@ -1139,7 +1138,7 @@
       "margin": 1.5639,
       "leverage": 15,
       "entryPrice": 0.7137,
-      "currentPrice": 0.7138,
+      "currentPrice": 0.7136,
       "tpPrice": 0.7163050049999999,
       "slPrice": 0.71070246,
       "tpPct": 0.365,
@@ -1161,7 +1160,7 @@
       "margin": 1.5639,
       "leverage": 15,
       "entryPrice": 0.7129281000000001,
-      "currentPrice": 0.7138,
+      "currentPrice": 0.7136,
       "tpPrice": 0.714952815804,
       "slPrice": 0.709138914588,
       "tpPct": 0.284,
@@ -1183,7 +1182,7 @@
       "margin": 1.5639,
       "leverage": 15,
       "entryPrice": 71.09,
-      "currentPrice": 71.11,
+      "currentPrice": 71.1,
       "tpPrice": 71.3331278,
       "slPrice": 70.79142200000001,
       "tpPct": 0.342,
@@ -1205,7 +1204,7 @@
       "margin": 1.5639,
       "leverage": 15,
       "entryPrice": 71.053338,
-      "currentPrice": 71.11,
+      "currentPrice": 71.1,
       "tpPrice": 71.24233987908,
       "slPrice": 70.63568087160002,
       "tpPct": 0.266,
@@ -1221,45 +1220,25 @@
       "id": "GRD-342962",
       "pair": "AVAX/USDT",
       "symbol": "AVAXUSDT",
-      "gridLevel": "L1 (#3🥉)",
+      "gridLevel": "L1+L2 (#3🥉)",
       "orderStatus": "FILLED",
       "side": "LONG",
-      "margin": 1.5599,
+      "margin": 3.1198,
       "leverage": 15,
-      "entryPrice": 7.094,
-      "currentPrice": 7.088,
-      "tpPrice": 7.118829000000001,
-      "slPrice": 7.064205200000001,
-      "tpPct": 0.35,
-      "slPct": 0.42,
-      "dcaCount": 0,
+      "entryPrice": 7.0896889,
+      "currentPrice": 7.087,
+      "tpPrice": 7.109540028919999,
+      "slPrice": 7.068419833299999,
+      "tpPct": 0.28,
+      "slPct": 0.3,
+      "dcaCount": 1,
       "reduceOnly": false,
       "reanchorCount": 0,
       "trailingLocked": false,
       "lockFloorPct": 0,
-      "openedAt": "2026-11-16T13:16:04.307Z"
-    },
-    {
-      "id": "GRD-116858",
-      "pair": "AVAX/USDT",
-      "symbol": "AVAXUSDT",
-      "gridLevel": "L2 (#3🥉)",
-      "orderStatus": "PENDING_LIMIT",
-      "side": "LONG",
-      "margin": 1.5599,
-      "leverage": 15,
-      "entryPrice": 7.0853778,
-      "currentPrice": 7.088,
-      "tpPrice": 7.1046500276160005,
-      "slPrice": 7.048663948560001,
-      "tpPct": 0.272,
-      "slPct": 0.42,
-      "dcaCount": 0,
-      "reduceOnly": false,
-      "reanchorCount": 1,
-      "trailingLocked": false,
-      "lockFloorPct": 0,
-      "openedAt": "2026-11-16T13:16:04.310Z"
+      "openedAt": "2026-11-16T13:16:04.307Z",
+      "wasPendingLimit": true,
+      "justMergedAt": 1794835068358
     }
   ],
   "trades": [
