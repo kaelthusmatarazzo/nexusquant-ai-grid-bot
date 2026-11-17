@@ -2,24 +2,24 @@
   "meta": {
     "engine": "NexusQuant GridDB v6.1 (MEXC Positive Payoff Grid)",
     "createdAt": "2026-09-29T07:52:30.665Z",
-    "updatedAt": "2026-11-17T03:47:29.224Z",
+    "updatedAt": "2026-11-17T03:47:55.237Z",
     "totalSavedTrades": 1000,
     "recalibratedRealisticWinRate": true
   },
   "wallet": {
     "initialCapital": 100,
-    "walletBalance": 57.279,
-    "totalProfit": -42.721,
+    "walletBalance": 57.1318,
+    "totalProfit": -42.8682,
     "vaultBalance": 0,
     "totalWithdrawn": 0,
     "wins": 2245,
-    "losses": 1117,
+    "losses": 1118,
     "botStartedAt": 1790908565267,
     "dailyDate": "2026-11-17",
     "dailyStartBalance": 56.5314,
-    "dailyProfitUSD": 0.7476,
+    "dailyProfitUSD": 0.6004,
     "dailyGoalReached": false,
-    "dailyProfitPct": 1.32,
+    "dailyProfitPct": 1.06,
     "lifetimeBotStats": {
       "FETUSDT": {
         "realizedProfitUSD": -1.2156,
@@ -27,9 +27,9 @@
         "losses": 122
       },
       "NEARUSDT": {
-        "realizedProfitUSD": -9.5998,
+        "realizedProfitUSD": -9.747,
         "wins": 308,
-        "losses": 182
+        "losses": 183
       },
       "SEIUSDT": {
         "realizedProfitUSD": -1.5491,
@@ -93,7 +93,7 @@
       }
     },
     "lifetimeBotStatsSeeded": true,
-    "safeMartingaleStep": 0
+    "safeMartingaleStep": 1
   },
   "gridConfig": {
     "botRunning": true,
@@ -109,45 +109,34 @@
     "compoundEnabled": true
   },
   "liveState": {
-    "currentPrice": 0.7279,
-    "liveAnchorPrice": 0.7279,
+    "currentPrice": 0.7281,
+    "liveAnchorPrice": 0.7281,
     "simOffset": 0,
     "trendMomentum": 0,
     "lastEvent": {
-      "id": "GRD-412501-FILL-MERGE",
+      "id": "GRD-105462-OPEN",
       "type": "entry",
-      "timestamp": 1794887205192,
-      "message": "⚡ [MEXC LIMIT L2 EXECUTADA 0% TAXA] NEAR/USDT absorveu recuo @ $3.237! Novo Preço Médio colado (-0.11%): $3.234 ➔ Alvo Lucro: +$0.12"
+      "timestamp": 1794887263233,
+      "message": "⏳ [MEXC LIMIT • ETH/USDT] Posicionou Ordem Pendente L2 (#3🥉) LONG (0% Maker) @ $1828.67 ➔ TP: $1833.97"
     },
     "prices": {
-      "BTCUSDT": 65045.93,
+      "BTCUSDT": 65050,
       "ETHUSDT": 1832.67,
-      "BNBUSDT": 594.31,
+      "BNBUSDT": 594.44,
       "XRPUSDT": 0.9654,
       "FETUSDT": 0.133,
       "DOGEUSDT": 0.0593,
-      "SOLUSDT": 72.68,
-      "AVAXUSDT": 7.186,
-      "NEARUSDT": 3.242,
-      "INJUSDT": 7.216,
-      "SUIUSDT": 0.7279,
-      "SEIUSDT": 0.03935,
+      "SOLUSDT": 72.69,
+      "AVAXUSDT": 7.187,
+      "NEARUSDT": 3.244,
+      "INJUSDT": 7.22,
+      "SUIUSDT": 0.7281,
+      "SEIUSDT": 0.03938,
       "WIFUSDT": 0.1353,
       "RENDERUSDT": 1.393
     },
     "priceHistory": {
       "BTCUSDT": [
-        65074.27,
-        65072.29,
-        65071.53,
-        65070.48,
-        65068.11,
-        65068.12,
-        65068.11,
-        65066.02,
-        65071.13,
-        65071.53,
-        65077.94,
         65077.95,
         65076.89,
         65081.13,
@@ -181,15 +170,20 @@
         65058.26,
         65041.95,
         65056.25,
-        65045.93
+        65045.93,
+        65043.58,
+        65043.59,
+        65052,
+        65050.07,
+        65044,
+        65046.08,
+        65048.62,
+        65049.99,
+        65050,
+        65049.99,
+        65050
       ],
       "ETHUSDT": [
-        1831.71,
-        1831.7,
-        1831.81,
-        1831.71,
-        1831.78,
-        1831.79,
         1831.78,
         1831.95,
         1831.96,
@@ -228,18 +222,15 @@
         1832.68,
         1832.36,
         1832.66,
+        1832.67,
+        1832.66,
+        1832.7,
+        1832.71,
+        1832.67,
+        1832.66,
         1832.67
       ],
       "BNBUSDT": [
-        594.24,
-        594.25,
-        594.24,
-        594.25,
-        594.19,
-        594.15,
-        594.06,
-        593.95,
-        593.91,
         593.9,
         593.91,
         593.89,
@@ -275,15 +266,18 @@
         594.3,
         594.31,
         594.3,
-        594.31
+        594.31,
+        594.3,
+        594.31,
+        594.3,
+        594.38,
+        594.37,
+        594.43,
+        594.44,
+        594.43,
+        594.44
       ],
       "XRPUSDT": [
-        0.9649,
-        0.9648,
-        0.9647,
-        0.9648,
-        0.965,
-        0.9653,
         0.9652,
         0.9651,
         0.9652,
@@ -321,6 +315,12 @@
         0.9653,
         0.9654,
         0.9652,
+        0.9653,
+        0.9654,
+        0.9652,
+        0.9651,
+        0.9652,
+        0.9654,
         0.9653,
         0.9654
       ],
@@ -419,9 +419,6 @@
         0.0593
       ],
       "SOLUSDT": [
-        72.63,
-        72.61,
-        72.58,
         72.6,
         72.61,
         72.57,
@@ -463,10 +460,12 @@
         72.66,
         72.67,
         72.66,
-        72.68
+        72.68,
+        72.69,
+        72.68,
+        72.69
       ],
       "AVAXUSDT": [
-        7.178,
         7.177,
         7.178,
         7.179,
@@ -510,12 +509,10 @@
         7.186,
         7.184,
         7.188,
-        7.186
+        7.186,
+        7.187
       ],
       "NEARUSDT": [
-        3.231,
-        3.232,
-        3.234,
         3.233,
         3.234,
         3.232,
@@ -557,13 +554,12 @@
         3.243,
         3.242,
         3.243,
-        3.242
+        3.242,
+        3.243,
+        3.245,
+        3.244
       ],
       "INJUSDT": [
-        7.206,
-        7.209,
-        7.211,
-        7.213,
         7.217,
         7.213,
         7.21,
@@ -604,11 +600,13 @@
         7.22,
         7.223,
         7.22,
-        7.216
+        7.216,
+        7.214,
+        7.213,
+        7.216,
+        7.22
       ],
       "SUIUSDT": [
-        0.7269,
-        0.7267,
         0.7266,
         0.7265,
         0.7266,
@@ -651,10 +649,11 @@
         0.7276,
         0.7277,
         0.7278,
-        0.7279
+        0.7279,
+        0.728,
+        0.7281
       ],
       "SEIUSDT": [
-        0.03938,
         0.03939,
         0.0394,
         0.03939,
@@ -698,7 +697,8 @@
         0.03933,
         0.03934,
         0.03936,
-        0.03935
+        0.03935,
+        0.03938
       ],
       "WIFUSDT": [
         0.1343,
@@ -801,8 +801,8 @@
         "pair": "SOL/USDT",
         "realizedProfitUSD": -3.1783,
         "realizedProfitBRL": -17.32,
-        "floatingPnlUSD": 0.0154,
-        "totalBotProfitUSD": -3.1629,
+        "floatingPnlUSD": 0.0184,
+        "totalBotProfitUSD": -3.1599,
         "wins": 231,
         "losses": 108,
         "winRate": 68,
@@ -813,7 +813,7 @@
         ],
         "dynamicL1TpPct": 0.353,
         "dynamicL2TpPct": 0.274,
-        "rsi1m": 53.6
+        "rsi1m": 56.8
       },
       "SUIUSDT": {
         "symbol": "SUIUSDT",
@@ -829,7 +829,7 @@
         "activeLevels": [],
         "dynamicL1TpPct": 0.342,
         "dynamicL2TpPct": 0.266,
-        "rsi1m": 58.5
+        "rsi1m": 62.9
       },
       "WIFUSDT": {
         "symbol": "WIFUSDT",
@@ -893,15 +893,15 @@
         "activeLevels": [],
         "dynamicL1TpPct": 0.342,
         "dynamicL2TpPct": 0.266,
-        "rsi1m": 55.1
+        "rsi1m": 56.3
       },
       "INJUSDT": {
         "symbol": "INJUSDT",
         "pair": "INJ/USDT",
         "realizedProfitUSD": -3.9031,
         "realizedProfitBRL": -21.27,
-        "floatingPnlUSD": 0.0088,
-        "totalBotProfitUSD": -3.8943,
+        "floatingPnlUSD": -0.0159,
+        "totalBotProfitUSD": -3.919,
         "wins": 282,
         "losses": 144,
         "winRate": 66,
@@ -911,22 +911,20 @@
         ],
         "dynamicL1TpPct": 0.414,
         "dynamicL2TpPct": 0.322,
-        "rsi1m": 54.3
+        "rsi1m": 51.3
       },
       "NEARUSDT": {
         "symbol": "NEARUSDT",
         "pair": "NEAR/USDT",
-        "realizedProfitUSD": -9.5998,
-        "realizedProfitBRL": -52.32,
-        "floatingPnlUSD": -0.1165,
-        "totalBotProfitUSD": -9.7163,
+        "realizedProfitUSD": -9.747,
+        "realizedProfitBRL": -53.12,
+        "floatingPnlUSD": 0,
+        "totalBotProfitUSD": -9.747,
         "wins": 308,
-        "losses": 182,
+        "losses": 183,
         "winRate": 63,
-        "activeOrdersCount": 1,
-        "activeLevels": [
-          "L1+L2 (#3🥉)⚡"
-        ],
+        "activeOrdersCount": 0,
+        "activeLevels": [],
         "dynamicL1TpPct": 0.414,
         "dynamicL2TpPct": 0.322,
         "rsi1m": 59.3
@@ -961,7 +959,7 @@
         "activeLevels": [],
         "dynamicL1TpPct": 0.342,
         "dynamicL2TpPct": 0.266,
-        "rsi1m": 48
+        "rsi1m": 49.4
       },
       "XRPUSDT": {
         "symbol": "XRPUSDT",
@@ -977,23 +975,26 @@
         "activeLevels": [],
         "dynamicL1TpPct": 0.342,
         "dynamicL2TpPct": 0.266,
-        "rsi1m": 53.7
+        "rsi1m": 51.5
       },
       "ETHUSDT": {
         "symbol": "ETHUSDT",
         "pair": "ETH/USDT",
         "realizedProfitUSD": -2.4396,
         "realizedProfitBRL": -13.3,
-        "floatingPnlUSD": 0,
-        "totalBotProfitUSD": -2.4396,
+        "floatingPnlUSD": -0.0004,
+        "totalBotProfitUSD": -2.44,
         "wins": 116,
         "losses": 62,
         "winRate": 65,
-        "activeOrdersCount": 0,
-        "activeLevels": [],
+        "activeOrdersCount": 2,
+        "activeLevels": [
+          "L1 (#3🥉)⚡",
+          "L2 (#3🥉)⏳"
+        ],
         "dynamicL1TpPct": 0.373,
         "dynamicL2TpPct": 0.29,
-        "rsi1m": 59.9
+        "rsi1m": 59.5
       },
       "BNBUSDT": {
         "symbol": "BNBUSDT",
@@ -1009,7 +1010,7 @@
         "activeLevels": [],
         "dynamicL1TpPct": 0.342,
         "dynamicL2TpPct": 0.266,
-        "rsi1m": 52
+        "rsi1m": 67.1
       },
       "BTCUSDT": {
         "symbol": "BTCUSDT",
@@ -1025,7 +1026,7 @@
         "activeLevels": [],
         "dynamicL1TpPct": 0.342,
         "dynamicL2TpPct": 0.266,
-        "rsi1m": 43.1
+        "rsi1m": 43.4
       }
     },
     "pairCooldowns": {
@@ -1036,10 +1037,10 @@
         "lastStopAt": "2026-11-17T03:41:29.023Z"
       },
       "NEARUSDT": {
-        "pauseUntil": 1794885043906,
+        "pauseUntil": 1794887501230,
         "FlipUntil": 0,
         "blockedSide": null,
-        "lastStopAt": "2026-11-17T03:06:43.906Z"
+        "lastStopAt": "2026-11-17T03:47:41.230Z"
       },
       "SEIUSDT": {
         "pauseUntil": 1794709261416,
@@ -1117,40 +1118,16 @@
     "top3Pairs": [
       "SOLUSDT",
       "INJUSDT",
-      "NEARUSDT"
+      "ETHUSDT"
     ],
     "btcCircuitBreaker": {
       "active": false,
-      "btcDeltaPct": -0.044,
+      "btcDeltaPct": -0.043,
       "mode": "NORMAL_SAFE",
-      "label": "🛡️ Escudo BTC Normal (-0.044%)"
+      "label": "🛡️ Escudo BTC Normal (-0.043%)"
     }
   },
   "openPositions": [
-    {
-      "id": "GRD-115938",
-      "pair": "NEAR/USDT",
-      "symbol": "NEARUSDT",
-      "gridLevel": "L1+L2 (#3🥉)",
-      "orderStatus": "FILLED",
-      "side": "SHORT",
-      "margin": 2.9724,
-      "leverage": 15,
-      "entryPrice": 3.233553,
-      "currentPrice": 3.242,
-      "tpPrice": 3.2244990516,
-      "slPrice": 3.2432536589999996,
-      "tpPct": 0.28,
-      "slPct": 0.3,
-      "dcaCount": 1,
-      "reduceOnly": false,
-      "reanchorCount": 0,
-      "trailingLocked": false,
-      "lockFloorPct": 0,
-      "openedAt": "2026-11-17T03:41:31.024Z",
-      "wasPendingLimit": true,
-      "justMergedAt": 1794887205192
-    },
     {
       "id": "GRD-202554",
       "pair": "SOL/USDT",
@@ -1161,7 +1138,7 @@
       "margin": 1.487,
       "leverage": 15,
       "entryPrice": 72.63,
-      "currentPrice": 72.68,
+      "currentPrice": 72.69,
       "tpPrice": 72.8863839,
       "slPrice": 72.32495399999999,
       "tpPct": 0.353,
@@ -1182,15 +1159,15 @@
       "side": "LONG",
       "margin": 1.487,
       "leverage": 15,
-      "entryPrice": 72.470214,
-      "currentPrice": 72.68,
-      "tpPrice": 72.66878238636,
+      "entryPrice": 72.530082,
+      "currentPrice": 72.69,
+      "tpPrice": 72.72881442468,
       "slPrice": 72.1658391012,
       "tpPct": 0.274,
       "slPct": 0.42,
       "dcaCount": 0,
       "reduceOnly": false,
-      "reanchorCount": 0,
+      "reanchorCount": 1,
       "trailingLocked": false,
       "lockFloorPct": 0,
       "openedAt": "2026-11-17T03:42:07.056Z"
@@ -1205,7 +1182,7 @@
       "margin": 2.9786,
       "leverage": 15,
       "entryPrice": 7.2174266,
-      "currentPrice": 7.216,
+      "currentPrice": 7.22,
       "tpPrice": 7.197217805519999,
       "slPrice": 7.239078879799999,
       "tpPct": 0.28,
@@ -1218,9 +1195,69 @@
       "openedAt": "2026-11-17T03:44:41.122Z",
       "wasPendingLimit": true,
       "justMergedAt": 1794887121142
+    },
+    {
+      "id": "GRD-621632",
+      "pair": "ETH/USDT",
+      "symbol": "ETHUSDT",
+      "gridLevel": "L1 (#3🥉)",
+      "orderStatus": "FILLED",
+      "side": "LONG",
+      "margin": 1.4854,
+      "leverage": 15,
+      "entryPrice": 1832.7,
+      "currentPrice": 1832.67,
+      "tpPrice": 1839.535971,
+      "slPrice": 1825.00266,
+      "tpPct": 0.373,
+      "slPct": 0.42,
+      "dcaCount": 0,
+      "reduceOnly": false,
+      "reanchorCount": 0,
+      "trailingLocked": false,
+      "lockFloorPct": 0,
+      "openedAt": "2026-11-17T03:47:43.230Z"
+    },
+    {
+      "id": "GRD-105462",
+      "pair": "ETH/USDT",
+      "symbol": "ETHUSDT",
+      "gridLevel": "L2 (#3🥉)",
+      "orderStatus": "PENDING_LIMIT",
+      "side": "LONG",
+      "margin": 1.4854,
+      "leverage": 15,
+      "entryPrice": 1828.6680600000002,
+      "currentPrice": 1832.67,
+      "tpPrice": 1833.971197374,
+      "slPrice": 1820.9876541480003,
+      "tpPct": 0.29,
+      "slPct": 0.42,
+      "dcaCount": 0,
+      "reduceOnly": false,
+      "reanchorCount": 0,
+      "trailingLocked": false,
+      "lockFloorPct": 0,
+      "openedAt": "2026-11-17T03:47:43.233Z"
     }
   ],
   "trades": [
+    {
+      "id": "GRD-115938",
+      "timestamp": "2026-11-17T03:47:41.230Z",
+      "time": "03:47:41",
+      "symbol": "NEARUSDT",
+      "pair": "NEAR/USDT",
+      "gridMode": "MEXC_GRID_SL",
+      "gridLevel": "L1+L2 (#3🥉)",
+      "side": "SHORT",
+      "entryPrice": 3.233553,
+      "exitPrice": 3.2432536589999996,
+      "feeUSD": 0.0134,
+      "pnlUSD": -0.1472,
+      "pnlBRL": -0.8022,
+      "balanceAfter": 57.13
+    },
     {
       "id": "GRD-342223",
       "timestamp": "2026-11-17T03:44:41.120Z",
@@ -17204,22 +17241,6 @@
       "pnlUSD": 0.0561,
       "pnlBRL": 0.3057,
       "balanceAfter": 65.62
-    },
-    {
-      "id": "GRD-196987",
-      "timestamp": "2026-11-15T18:28:55.428Z",
-      "time": "18:28:55",
-      "symbol": "ETHUSDT",
-      "pair": "ETH/USDT",
-      "gridMode": "MEXC_GRID_TP",
-      "gridLevel": "L1+L2 (#2🥈) 🛡️",
-      "side": "SHORT",
-      "entryPrice": 1816.9005650000001,
-      "exitPrice": 1811.8132434180002,
-      "feeUSD": 0.0051,
-      "pnlUSD": 0.1385,
-      "pnlBRL": 0.7548,
-      "balanceAfter": 65.57
     }
   ],
   "withdrawals": []
